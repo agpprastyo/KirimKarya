@@ -18,23 +18,23 @@ Arsitektur ini memisahkan antara *Main API Server* yang melayani permintaan HTTP
 
 ```mermaid
 graph TD  
-%% Entitas Eksternal  
-Client\[Klien / Studio\] \--\>|HTTP/HTTPS| WebUI(SvelteKit UI)  
-WebUI \--\>|REST API / JSON| API(Hono \+ Bun API Server)
+    %% Entitas Eksternal  
+    Client["Klien / Studio"] -->|HTTP/HTTPS| WebUI["WebUI (SvelteKit UI)"]  
+    WebUI -->|REST API / JSON| API["API (Hono + Bun API Server)"]
 
     %% Komponen Backend  
-    API \<--\>|Read/Write| DB\[(PostgreSQL)\]  
-    API \<--\>|Cache & Queue| Redis\[(Redis)\]  
-    API \--\>|Upload Original| S3\[Cloudflare R2 / AWS S3\]
+    API <-->|Read/Write| DB[("(PostgreSQL)")]  
+    API <-->|Cache & Queue| Redis[("(Redis)")]  
+    API -->|Upload Original| S3["S3 (Cloudflare R2 / AWS S3)"]
 
     %% Background Processing  
-    Redis \-.-\>|Consume Job| Worker(Bun Background Worker)  
-    Worker \--\>|Download Original & Upload Processed| S3  
-    Worker \--\>|Update Status| DB
+    Redis -.->|Consume Job| Worker["Worker (Bun Background Worker)"]  
+    Worker -->|Download Original & Upload Processed| S3  
+    Worker -->|Update Status| DB
 
     %% Cron Jobs  
-    Cron(Bun Cron Scheduler) \--\>|Trigger Midnight| Worker  
-    Cron \--\>|Send Email| Email(Email Service / Resend/SMTP)
+    Cron["Cron (Bun Cron Scheduler)"] -->|Trigger Midnight| Worker  
+    Cron -->|Send Email| Email["Email (Email Service / Resend/SMTP)"]
 ```
 
 ## **4\. Alur Kerja Sistem (Data Flow)**
