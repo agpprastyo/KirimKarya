@@ -1,7 +1,6 @@
-# ** Kirim Karya | High-Level Design (HLD): Platform Manajemen Galeri & Client Proofing**
+# **Kirim Karya | High-Level Design (HLD): Platform Manajemen Galeri & Client Proofing**
 
 ## **1\. Pendahuluan**
-[//]: # ( [MermaidChart: f22fff4b-458f-478d-aadb-6b5c467f075d]
 Dokumen ini menguraikan arsitektur tingkat tinggi (High-Level Design) untuk SaaS Manajemen Galeri dan *Client Proofing*. Platform ini dirancang bagi studio kreatif (fotografer/videografer) untuk mengelola proyek klien, mendistribusikan foto dengan aman, serta memfasilitasi proses pemilihan (*proofing*) dan pemberian *feedback* secara efisien.
 
 ## **2\. Tech Stack Utama**
@@ -17,11 +16,10 @@ Dokumen ini menguraikan arsitektur tingkat tinggi (High-Level Design) untuk SaaS
 
 Arsitektur ini memisahkan antara *Main API Server* yang melayani permintaan HTTP secara *real-time* dan *Background Worker* yang menangani tugas-tugas berat untuk memastikan API tetap responsif.
 
-    graph TD  
-
-    %% Entitas Eksternal  
-    Client\[Klien / Studio\] \--\>|HTTP/HTTPS| WebUI(SvelteKit UI)  
-    WebUI \--\>|REST API / JSON| API(Hono \+ Bun API Server)
+graph TD  
+%% Entitas Eksternal  
+Client\[Klien / Studio\] \--\>|HTTP/HTTPS| WebUI(SvelteKit UI)  
+WebUI \--\>|REST API / JSON| API(Hono \+ Bun API Server)
 
     %% Komponen Backend  
     API \<--\>|Read/Write| DB\[(PostgreSQL)\]  
