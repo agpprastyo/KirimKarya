@@ -1,0 +1,13 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "failed_update_profile": "Failed to update profile",
+  "profile_updated": "Profile updated successfully",
+  "passwords_not_match": "Passwords do not match",
+  "failed_change_password": "Failed to change password",
+  "password_changed": "Password changed successfully",
+  "account_settings": "Account Settings",
+  "account_settings_desc": "Manage your profile and security preferences here.",
+  "admin_dashboard": "Admin Dashboard",
+  "user_management": "User Management",
+  "logout": "Logout"
+}

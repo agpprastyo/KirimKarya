@@ -7,8 +7,9 @@ Dokumen ini menguraikan arsitektur tingkat tinggi (High-Level Design) untuk SaaS
 
 * **Frontend / UI:** SvelteKit (SSR & CSR)
 * **Backend API & Web Server:** Hono berjalan di *runtime* Bun
-* **Database Utama:** PostgreSQL
+* **Database & ORM:** PostgreSQL dengan Drizzle ORM
 * **Caching & Message Queue:** Redis
+* **Auth:** Better Auth
 * **Object Storage:** Cloudflare R2 / AWS S3
 * **Image Processing:** sharp (via Bun)
 
@@ -49,9 +50,10 @@ graph TD
     * Menambahkan *Watermark* pada foto tampilan.
 5. **Save & Notify:** Worker mengunggah versi *thumbnail* dan *watermark* ke S3, mengupdate status foto di PostgreSQL menjadi "Ready", dan memperbarui *cache* galeri di Redis.
 
-### **4.2. Alur Akses Galeri Klien (Caching Strategy)**
+### **4.2. Alur Akses Galeri Klien (Share Link & Caching Strategy)**
 
-1. **Access Request:** Klien membuka *link* galeri yang diamankan dengan *password*.
+1. **Share Link Generation:** Studio men-*generate* tautan berbagi (*share link*) unik untuk galeri layaknya Google Drive. Tautan ini dikirim ke Klien dan dapat dilindungi oleh *password* atau batas waktu tayang.
+2. **Access Request:** Klien membuka *share link* galeri tersebut.
 2. **Cache Check:** Hono API akan mengecek *cache* di Redis (GET gallery:{id}:metadata).
 3. **Cache Hit/Miss:**
     * **Hit:** Jika data ada, Hono langsung mengembalikan daftar URL foto (S3 Presigned URLs) ke SvelteKit dalam hitungan milidetik.
@@ -68,7 +70,16 @@ Bun mengeksekusi *script* penjadwalan secara terpisah (bisa menggunakan *node-cr
     4. Menghapus data *records* foto dari PostgreSQL.
     5. Mengirimkan instruksi DeleteObjects ke S3/R2 untuk menghapus file fisik secara permanen (menghemat biaya *storage*).
 
-## **5\. Skema Database Sederhana (PostgreSQL)**
+## **5\. Autentikasi & Kontrol Akses (Better Auth)**
+
+Platform tidak membangun otentikasi dari nol: seluruh flow login dan session dikelola oleh Better Auth, yang merupakan framework otentikasi agnostik terhadap stack dan sudah menyediakan fitur email/password, OAuth, plugin, serta dukungan untuk SvelteKit dan Hono tanpa menulis ulang mekanisme sesi dasar.citeturn0search7
+
+1. **Integrasi Better Auth Core & Social Login:** Backend (Hono) memanggil `betterAuth` untuk proses autentikasi. Metode login utama difokuskan pada **Google Login / Register** (via `socialProviders`), selain login kredensial bawaan. Better Auth memvalidasi autentikasi, membuat session, dan mengeluarkan token yang dikirim ke SvelteKit. Token ini diteruskan sebagai cookie HTTP-only atau header Bearer, sedangkan SvelteKit memanfaatkan SDK Better Auth untuk otentikasi sisi klien sehingga kita tidak perlu menyimpan password di aplikasi.
+2. **Plugin Lanjutan:** Kami mengaktifkan plugin `passkey()`, `twoFactor()`, serta plugin organisasi/tenant (agar studio, klien, dan subcontractor terpisah). Klien yang diundang via *share link* bisa langsung mengakses tanpa login kompleks.
+3. **Infrastruktur & Keamanan Operasional:** Better Auth Infrastructure menyediakan dashboard manajemen user/org, audit log, abuse protection (anti credential stuffing, disposable email, impossible travel), serta transactional messaging (email/SMS) untuk verifikasi dan 2FA tanpa membangun layanan sendiri.citeturn0search3
+4. **Akses API Post-login:** Setelah session diterbitkan, Hono memanggil `auth.api.requireSession` untuk setiap route yang membutuhkan akses gallery dan memetakan ID tenant ke record di PostgreSQL, Redis cache, dan S3. SvelteKit cukup menyertakan token session agar hooks `load` dapat mengambil metadata galeri. Better Auth menyimpan sesi di Redis atau database pilihan kami sehingga kita bisa menghapus sesi (e.g., logout) tanpa mencabut data pengguna utama.citeturn0search5
+
+## **6\. Skema Database Sederhana (PostgreSQL)**
 
 * **users** (Studio/Tenant)
     * id, email, password\_hash, studio\_name, subscription\_tier
@@ -79,7 +90,7 @@ Bun mengeksekusi *script* penjadwalan secara terpisah (bisa menggunakan *node-cr
 * **feedbacks** (Client Proofing)
     * id, photo\_id, is\_selected (boolean), comment, created\_at
 
-## **6\. Advanced Backend Implementations Highlights**
+## **7\. Advanced Backend Implementations Highlights**
 
 1. **Non-blocking API (Hono \+ Bun):** Memanfaatkan performa I/O Bun yang sangat cepat. Proses manipulasi gambar yang memakan banyak CPU *cycle* dipisahkan ke *worker thread* / *process* tersendiri agar *Event Loop* utama Hono tidak terblokir.
 2. **Cache Invalidation:** Setiap kali ada interaksi baru (misal: Studio menambah foto baru ke galeri), Hono API secara eksplisit menghapus kunci Redis (DEL gallery:{id}:metadata) (*Cache Invalidation*), sehingga klien berikutnya akan mendapatkan data *fresh* dari *database*.

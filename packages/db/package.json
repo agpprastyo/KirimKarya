@@ -1,0 +1,19 @@
+{
+    "name": "@kirimkarya/db",
+    "version": "1.0.0",
+    "type": "module",
+    "main": "src/index.ts",
+    "dependencies": {
+        "better-auth": "^1.5.3",
+        "dotenv": "^17.3.1",
+        "drizzle-orm": "^0.39.0",
+        "postgres": "^3.4.4",
+        "uuidv7": "^1.1.0",
+        "zod": "^4.3.6"
+    },
+    "devDependencies": {
+        "drizzle-kit": "^0.30.2",
+        "typescript": "^5.0.0",
+        "@types/bun": "latest"
+    }
+}

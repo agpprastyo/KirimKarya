@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+@plugin "daisyui" {
+    themes: winter --default, night --prefersdark;
+}
+
+@custom-variant is-drawer-open (.drawer:has(.drawer-toggle:checked) &);
+@custom-variant is-drawer-close (.drawer:has(.drawer-toggle:not(:checked)) &);
