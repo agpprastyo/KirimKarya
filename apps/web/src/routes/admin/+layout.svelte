@@ -142,9 +142,13 @@
             </nav>
 
             <!-- Sidebar Footer -->
-            <div class="mt-auto border-t border-base-content/5 p-4 space-y-4">
-                <div class="flex items-center gap-2">
-                    <div class="flex-1">
+            <div
+                class="mt-auto border-t border-base-content/5 p-4 is-drawer-close:p-2 is-drawer-close:pb-4 space-y-4"
+            >
+                <div
+                    class="flex items-center gap-2 is-drawer-close:justify-center"
+                >
+                    <div class="flex-1 is-drawer-close:hidden">
                         <LocaleSwitcher />
                     </div>
                     <div
@@ -154,28 +158,9 @@
                     </div>
                 </div>
 
-                <button
-                    onclick={handleLogout}
-                    class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black hover:bg-error/10 hover:text-error transition-all border border-base-content/5 group"
-                >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        class="size-3.5 opacity-50 group-hover:opacity-100"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="3"
-                    >
-                        <path
-                            d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"
-                        />
-                    </svg>
-                    <span class="is-drawer-close:hidden">{m.logout()}</span>
-                </button>
-
                 <a
                     href={localizeHref("/admin/profile")}
-                    class="flex items-center gap-3 p-2 rounded-2xl hover:bg-base-200/50 transition-all group"
+                    class="flex items-center gap-3 p-2 rounded-2xl hover:bg-base-200/50 transition-all group is-drawer-close:justify-center"
                 >
                     <Avatar
                         src={$session.data?.user?.image}
@@ -196,6 +181,25 @@
                         </p>
                     </div>
                 </a>
+
+                <button
+                    onclick={handleLogout}
+                    class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black hover:bg-error/10 hover:text-error transition-all border border-base-content/5 group is-drawer-close:p-2"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="size-4 opacity-50 group-hover:opacity-100"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="3"
+                    >
+                        <path
+                            d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"
+                        />
+                    </svg>
+                    <span class="is-drawer-close:hidden">{m.logout()}</span>
+                </button>
             </div>
         </aside>
     </div>

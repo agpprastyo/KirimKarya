@@ -1,19 +1,31 @@
-import { auth } from "./auth";
-import { Hono } from "hono";
+import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
-import { storage } from "./routes/storage";
-import { images } from "./routes/images";
-import { avatar } from "./routes/auth-avatar";
-import { health } from "./routes/health";
-import { apiResponse } from "./lib/response";
+import { requestId } from "hono/request-id";
+import { Scalar } from "@scalar/hono-api-reference";
+import path from "node:path";
 
+import { auth } from "./modules/auth/auth.config";
+import { env } from "./env";
 
-const app = new Hono();
+// Middlewares
+import { loggerMiddleware } from "./core/middlewares/logger";
+import { errorHandler } from "./core/middlewares/error-handler";
 
+// Controllers
+import healthRoutes from "./modules/health/health.controller";
+import authRoutes from "./modules/auth/auth.controller";
+import storageRoutes from "./modules/storage/storage.controller";
+import imagesRoutes from "./modules/images/images.controller";
+
+const app = new OpenAPIHono();
+
+// Global Middlewares
+app.use("*", requestId());
+app.use("*", loggerMiddleware());
 app.use(
     "/api/*",
     cors({
-        origin: ["http://localhost:5173"],
+        origin: [env.WEB_URL],
         allowMethods: ["POST", "GET", "OPTIONS"],
         allowHeaders: ["Content-Type", "Authorization"],
         exposeHeaders: ["Content-Length"],
@@ -21,23 +33,49 @@ app.use(
     })
 );
 
-app.get("/", (c) => {
-    return apiResponse.success(c, { health: "ok" }, "Kirim Karya API is running!");
+
+app.onError(errorHandler);
+
+app.get(
+    "/api/docs",
+    Scalar({
+        pageTitle: "Kirim Karya API Documentation",
+        theme: "kepler",
+        layout: "modern",
+        sources: [
+            { url: "/api/docs/open-api", title: "Internal API" },
+            { url: "/api/docs/better-auth.json", title: "Better Auth API" },
+        ],
+    })
+);
+
+app.doc("/api/docs/open-api", {
+    openapi: "3.0.0",
+    info: {
+        version: "1.0.0",
+        title: "Kirim Karya API",
+        description: "Internal REST API for Kirim Karya web application.",
+    },
 });
 
-app.route("/api/health", health);
-app.route("/api/storage", storage);
-app.route("/api/images", images);
-
-// Better Auth & Custom Auth Routes
-app.on(["POST", "GET"], "/api/auth/**", (c) => {
-    if (c.req.path === "/api/auth/upload-avatar" && c.req.method === "POST") {
-        return avatar.fetch(c.req.raw);
+app.get("/api/docs/better-auth.json", async (c) => {
+    try {
+        const schema = await auth.api.generateOpenAPISchema();
+        return c.json(schema);
+    } catch (error) {
+        return c.json({ error: "Failed to generate Better Auth OpenAPI schema." }, 500);
     }
-    return auth.handler(c.req.raw);
 });
+
+const routes = app
+    .route("/api/health", healthRoutes)
+    .route("/api/auth", authRoutes)
+    .route("/api/storage", storageRoutes)
+    .route("/api/images", imagesRoutes);
+
+export type AppType = typeof routes;
 
 export default {
-    port: process.env.PORT || 3000,
+    port: env.PORT,
     fetch: app.fetch,
 };

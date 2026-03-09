@@ -2,9 +2,9 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { db, user, session, account, verification, twoFactor } from "@kirimkarya/db";
 import { sendEmail } from "@kirimkarya/mail";
-import { twoFactor as twoFactorPlugin, admin } from "better-auth/plugins";
+import { twoFactor as twoFactorPlugin, admin, openAPI } from "better-auth/plugins";
 import { i18n } from "@better-auth/i18n";
-import { env } from "./env";
+import { env } from "../../env";
 
 export const auth = betterAuth({
     baseURL: env.BETTER_AUTH_URL,
@@ -64,6 +64,7 @@ export const auth = betterAuth({
     },
 
     plugins: [
+        openAPI(),
         twoFactorPlugin(),
         admin(),
         i18n({

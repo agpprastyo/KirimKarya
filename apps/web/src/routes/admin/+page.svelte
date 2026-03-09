@@ -18,6 +18,8 @@
         s3: "...",
     };
 
+    import { api } from "$lib/api";
+
     onMount(async () => {
         const statsRes = await authClient.admin.listUsers({
             query: { limit: 1000 },
@@ -33,10 +35,12 @@
         }
 
         try {
-            const healthRes = await fetch("http://localhost:3000/api/health");
-            const healthData = await healthRes.json();
-            if (healthData.data) {
-                systems = healthData.data;
+            const res = await api.api.health.$get();
+            if (res.ok) {
+                const healthData = await res.json();
+                if (healthData.data) {
+                    systems = healthData.data.services;
+                }
             }
         } catch (error) {
             console.error("Failed to fetch system health:", error);

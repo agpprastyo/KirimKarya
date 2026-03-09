@@ -13,6 +13,7 @@ export default defineConfig({
 			strategy: ['url', 'cookie', 'baseLocale'],
 		})
 	],
+	envDir: '../../',
 	server: {
 		proxy: {
 			'/api': {

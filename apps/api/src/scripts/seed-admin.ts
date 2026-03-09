@@ -1,21 +1,16 @@
-import * as dotenv from "dotenv";
-import * as path from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+import { env } from "../env";
 
 async function seedAdmin() {
     const { db, user: userTable } = await import("@kirimkarya/db");
     const { eq } = await import("drizzle-orm");
-    const { auth } = await import("./auth");
+    const { auth } = await import("../modules/auth/auth.config");
     const { parseArgs } = await import("util");
 
-    if (!process.env.DATABASE_URL) {
+    if (!env.DATABASE_URL) {
         console.error("❌ DATABASE_URL is not defined in environment.");
         process.exit(1);
     }
-    console.log(`DATABASE_URL: ${process.env.DATABASE_URL.replace(/:[^:@]+@/, ":****@")}`);
+    console.log(`DATABASE_URL: ${env.DATABASE_URL.replace(/:[^:@]+@/, ":****@")}`);
 
     const { values } = parseArgs({
         options: {

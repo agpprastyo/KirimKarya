@@ -8,10 +8,13 @@
     "dependencies": {
         "@better-auth/drizzle-adapter": "^1.5.3",
         "@better-auth/i18n": "^1.5.4",
+        "@hono/zod-openapi": "^1.2.2",
+        "@hono/zod-validator": "^0.7.6",
         "@kirimkarya/db": "workspace:*",
         "@kirimkarya/mail": "workspace:*",
         "@kirimkarya/redis": "workspace:*",
         "@kirimkarya/storage": "workspace:*",
+        "@scalar/hono-api-reference": "^0.10.0",
         "better-auth": "^1.5.3",
         "dotenv": "^17.3.1",
         "drizzle-orm": "^0.39.0",

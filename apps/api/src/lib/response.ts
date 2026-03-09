@@ -1,5 +1,26 @@
 import type { Context } from "hono";
 import type { StatusCode, ContentfulStatusCode } from "hono/utils/http-status";
+import { z } from "@hono/zod-openapi";
+
+/**
+ * Zod Schema Generators for OpenAPI Documentation
+ */
+export const createApiResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) => {
+    return z.object({
+        message: z.string().openapi({ example: "Success" }),
+        data: dataSchema,
+        meta: z.any().optional(),
+    });
+};
+
+export const ApiErrorSchema = (message: string = "Internal Server Error", errorDetails: any = null) => {
+    return z.object({
+        message: z.string().openapi({ example: message }),
+        error: z.any().optional().openapi({ example: errorDetails }),
+    });
+};
+
+export const DefaultApiErrorSchema = ApiErrorSchema();
 
 /**
  * Standard Pagination Metadata
@@ -11,43 +32,37 @@ export interface PaginationMeta {
     totalPages: number;
 }
 
-/**
- * API Response Class to enforce JSON convention
- */
+export interface ApiSuccessResponse<T = any> {
+    message: string;
+    data: T;
+    meta?: any;
+}
+
+export interface ApiErrorResponse {
+    message: string;
+    error?: any;
+}
+
 export const apiResponse = {
-    /**
-     * Standard Success Response
-     */
-    success: <T>(c: Context, data: T, message: string = "Operation successful", status: ContentfulStatusCode = 200) => {
-        return c.json({
+    success: <T>(
+        data: T,
+        message: string = "Success",
+        meta?: any
+    ): ApiSuccessResponse<T> => {
+        return {
             message,
             data,
-        }, status);
+            meta,
+        };
     },
-
-    /**
-     * Paginated Success Response
-     */
-    paginated: <T>(
-        c: Context,
-        data: T[],
-        pagination: PaginationMeta,
-        message: string = "Data retrieved successfully"
-    ) => {
-        return c.json({
+    /*  */
+    error: (
+        message: string = "Internal Server Error",
+        errorDetails: any = null
+    ): ApiErrorResponse => {
+        return {
             message,
-            data,
-            pagination,
-        }, 200);
-    },
-
-    /**
-     * Standard Error Response
-     */
-    error: (c: Context, message: string, error: any = null, status: ContentfulStatusCode = 400) => {
-        return c.json({
-            message,
-            error: error || message,
-        }, status);
+            error: errorDetails,
+        };
     },
 };
