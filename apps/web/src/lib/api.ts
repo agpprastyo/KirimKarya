@@ -4,4 +4,6 @@ import { env } from "../env";
 
 const apiUrl = env.PUBLIC_API_URL || "http://localhost:3000";
 
-export const api = hc<AppType>(apiUrl);
+export const api = hc<AppType>(apiUrl, {
+    fetch: (url: string | URL | Request, init?: RequestInit) => fetch(url, { ...init, credentials: "include" }),
+});

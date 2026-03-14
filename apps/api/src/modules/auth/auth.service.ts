@@ -1,5 +1,4 @@
-import { s3, env as storageEnv } from "@kirimkarya/storage";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { s3 } from "@kirimkarya/storage";
 import { db, user } from "@kirimkarya/db";
 import { eq } from "drizzle-orm";
 import sharp from "sharp";
@@ -29,15 +28,11 @@ export class AuthService {
 
             // S3 Upload Key
             const filename = `avatar/${userId}.webp`;
+            const fileRef = s3.file(filename);
 
-            await s3.send(
-                new PutObjectCommand({
-                    Bucket: storageEnv.STORAGE_BUCKET,
-                    Key: filename,
-                    Body: processedBuffer,
-                    ContentType: "image/webp",
-                })
-            );
+            await fileRef.write(processedBuffer, {
+                type: "image/webp",
+            });
 
             // Construct proxy URL
             const publicUrl = `/api/images/${filename}`;
@@ -60,5 +55,5 @@ export class AuthService {
     }
 }
 
-// Singleton Service Export
+
 export const authService = new AuthService();

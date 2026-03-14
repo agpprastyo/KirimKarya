@@ -1,20 +1,16 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { imagesService } from "./images.service";
 import { ApiErrorSchema } from "../../lib/response";
 
 const imagesRoutes = new OpenAPIHono();
 
 const getImageRoute = createRoute({
-    summary: "Get Image",
-    description: "Retrieves an image from the storage bucket",
-    tag: ["Images"],
     method: "get",
-    path: "/{key}",
-    request: {
-        params: z.object({
-            key: z.string().openapi({ param: { name: "key", in: "path" }, example: "avatar.jpg" }),
-        }),
-    },
+    path: "/*",
+    summary: "Get Image",
+    description: "Retrieves an image from the storage bucket. Supports nested paths.",
+    tags: ["Images"],
+    request: {},
     responses: {
         200: {
             content: {
@@ -39,7 +35,16 @@ const getImageRoute = createRoute({
 });
 
 const route = imagesRoutes.openapi(getImageRoute, async (c) => {
-    const key = c.req.param("key");
+    const user = (c as any).get("user");
+
+    const fullPath = new URL(c.req.url).pathname;
+    const key = fullPath.replace("/api/images/", "");
+
+    if (!key.startsWith(`${user.id}/`)) {
+        console.warn(`[Security] User ${user.id} attempted to access unauthorized key: ${key}`);
+        return c.json({ error: "Forbidden" }, 403);
+    }
+
     const { bytes, contentType } = await imagesService.getImage(key);
 
     return c.body(bytes as any, 200, {

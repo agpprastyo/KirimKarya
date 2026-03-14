@@ -1,5 +1,4 @@
-import { s3, env as storageEnv } from "@kirimkarya/storage";
-import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { s3 } from "@kirimkarya/storage";
 import { HttpError } from "../../core/exceptions/http-error";
 
 export class ImagesService {
@@ -10,27 +9,23 @@ export class ImagesService {
      */
     async getImage(key: string): Promise<{ bytes: Uint8Array; contentType: string }> {
         try {
-            const command = new GetObjectCommand({
-                Bucket: storageEnv.STORAGE_BUCKET,
-                Key: key,
-            });
+            console.log("🔍 ImagesService.getImage - S3 Key:", key);
+            const fileRef = s3.file(key);
 
-            const response = await s3.send(command);
-
-            if (!response.Body) {
-                throw new HttpError(404, "Image body is empty");
+            // Check if file exists to return 404 properly (optional, but good practice since bytes() might throw a different error if missing)
+            const exists = await fileRef.exists();
+            if (!exists) {
+                throw new HttpError(404, "Image not found");
             }
 
-            // Convert S3 Body to ByteArray
-            const bytes = await response.Body.transformToByteArray();
+            const bytes = await fileRef.bytes();
 
             return {
                 bytes,
-                contentType: response.ContentType || "image/jpeg",
+                contentType: fileRef.type || "image/jpeg",
             };
         } catch (error: any) {
             console.error("ImagesService.getImage Error:", error);
-            // S3 NoSuchKey usually throws 404
             throw new HttpError(404, "Image not found", error.message);
         }
     }

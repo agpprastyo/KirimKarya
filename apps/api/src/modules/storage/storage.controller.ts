@@ -5,7 +5,7 @@ import { storageService } from "./storage.service";
 const storageRoutes = new OpenAPIHono();
 
 const UploadStorageResponseSchema = z.object({
-    url: z.string().url().openapi({ example: "https://my-bucket.s3.amazonaws.com/file.pdf" }),
+    url: z.url().openapi({ example: "https://my-bucket.s3.amazonaws.com/file.pdf" }),
 });
 
 const uploadRoute = createRoute({
@@ -46,6 +46,7 @@ const uploadRoute = createRoute({
 });
 
 const route = storageRoutes.openapi(uploadRoute, async (c) => {
+    const user = (c as any).get("user");
     const body = await c.req.parseBody();
     const file = body["file"] as File;
 
@@ -53,7 +54,7 @@ const route = storageRoutes.openapi(uploadRoute, async (c) => {
         return c.json(apiResponse.error("No file provided"), 400);
     }
 
-    const publicUrl = await storageService.uploadFile(file);
+    const publicUrl = await storageService.uploadFile(file, user.id);
 
     const payload = { url: publicUrl };
     return c.json(apiResponse.success(payload, "File uploaded successfully"), 200);

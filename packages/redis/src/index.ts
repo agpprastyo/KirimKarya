@@ -1,13 +1,8 @@
-import Redis from "ioredis";
+import { RedisClient } from "bun";
 import { env } from "./env";
 
-export const redis = new Redis(env.REDIS_URL, {
-    maxRetriesPerRequest: 1,
-    retryStrategy: (times: number) => {
-        // Return null to stop retrying indefinitely
-        if (times > 3) return null;
-        return Math.min(times * 50, 2000);
-    },
+export const redis = new RedisClient(env.REDIS_URL, {
+    maxRetries: 3,
 });
 
 export * from "./env";

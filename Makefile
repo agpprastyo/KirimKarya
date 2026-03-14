@@ -14,13 +14,22 @@ install:
 
 # Start all applications in development mode (parallel execution)
 dev:
+	@make infra-up
 	@echo "Starting API Server and Web Client (and Worker)..."
 	make -j4 api web worker db-studio
 
 # Stop all applications by killing processes on known ports
 dev-stop:
 	@echo "Stopping processes on ports 3000, 3001, 5173, and 4983..."
-	@lsof -ti :3000,3001,5173,4983 | xargs kill -9 2>/dev/null || true
+	@for port in 3000 3001 5173 4983; do \
+		pid=$$(lsof -ti :$$port); \
+		if [ -n "$$pid" ]; then \
+			echo "Killing process on port $$port (PID: $$pid)"; \
+			kill -9 $$pid 2>/dev/null || true; \
+		fi \
+	done
+	@pkill -9 -f "bun run" 2>/dev/null || true
+	@pkill -9 -f "vite" 2>/dev/null || true
 	@echo "Done."
 
 
@@ -34,7 +43,7 @@ web:
 
 # Run Background Worker (if implemented later)
 worker:
-	cd apps/worker && bun run dev
+	cd apps/worker && bun --env-file=../../.env run dev
 
 
 

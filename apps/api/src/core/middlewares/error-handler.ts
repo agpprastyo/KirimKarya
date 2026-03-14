@@ -5,7 +5,7 @@ import { apiResponse } from "../../lib/response";
 import { env } from "../../env";
 
 export const errorHandler = (err: Error, c: Context) => {
-    // 1. Handle Zod Validation Errors
+
     if (err instanceof ZodError) {
         const formattedErrors = err.issues.map((e: any) => ({
             field: e.path.join("."),
@@ -14,12 +14,10 @@ export const errorHandler = (err: Error, c: Context) => {
         return c.json(apiResponse.error("Validation failed", formattedErrors), 400);
     }
 
-    // 2. Handle Custom HttpError
     if (err instanceof HttpError) {
         return c.json(apiResponse.error(err.message, err.details), err.statusCode as any);
     }
 
-    // 3. Fallback Unknown Errors (Internal Server Error)
     console.error(`[ErrorHandler] Uncaught Exception:`, err);
     return c.json(
         apiResponse.error(

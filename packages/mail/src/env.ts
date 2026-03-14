@@ -9,7 +9,7 @@ dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 const envSchema = z.object({
     SMTP_HOST: z.string(),
     SMTP_PORT: z.string().transform(Number),
-    SMTP_USER: z.string().email(),
+    SMTP_USER: z.email(),
     SMTP_PASS: z.string(),
 });
 

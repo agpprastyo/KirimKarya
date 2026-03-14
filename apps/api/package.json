@@ -3,7 +3,9 @@
     "version": "1.0.0",
     "type": "module",
     "scripts": {
-        "dev": "bun run --hot src/index.ts"
+        "dev": "bun run --hot src/index.ts",
+        "test:stats": "bun run src/scripts/test-stats.ts",
+        "test:security": "bun run src/scripts/test-security.ts"
     },
     "dependencies": {
         "@better-auth/drizzle-adapter": "^1.5.3",
@@ -12,10 +14,12 @@
         "@hono/zod-validator": "^0.7.6",
         "@kirimkarya/db": "workspace:*",
         "@kirimkarya/mail": "workspace:*",
+        "@kirimkarya/queue": "workspace:*",
         "@kirimkarya/redis": "workspace:*",
         "@kirimkarya/storage": "workspace:*",
         "@scalar/hono-api-reference": "^0.10.0",
         "better-auth": "^1.5.3",
+        "bullmq": "^5.41.0",
         "dotenv": "^17.3.1",
         "drizzle-orm": "^0.39.0",
         "hono": "^4.6.14",

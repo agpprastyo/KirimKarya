@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
 const envSchema = z.object({
-    DATABASE_URL: z.string().url(),
+    DATABASE_URL: z.url(),
 });
 
 export const env = envSchema.parse(process.env);

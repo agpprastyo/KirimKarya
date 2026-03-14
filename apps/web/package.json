@@ -32,6 +32,7 @@
 		"better-auth": "^1.5.3",
 		"hono": "^4.12.5",
 		"svelte-easy-crop": "^5.0.0",
+		"svelte-motion": "^0.12.2",
 		"theme-change": "^2.5.0",
 		"zod": "^4.3.6"
 	}

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, varchar, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, varchar, uuid, integer } from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
 export * from "./auth-schema";
 import { user } from "./auth-schema";
@@ -11,6 +11,7 @@ export const galleries = pgTable("galleries", {
     clientEmail: varchar("client_email", { length: 255 }),
     passwordHash: varchar("password_hash", { length: 255 }),
     status: varchar("status", { length: 50 }).default('DRAFT').notNull(),
+    views: integer("views").default(0).notNull(),
     expiresAt: timestamp("expires_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),

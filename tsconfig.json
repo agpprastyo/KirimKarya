@@ -32,6 +32,9 @@
       "@kirimkarya/mail": [
         "packages/mail/src/index.ts"
       ],
+      "@kirimkarya/queue": [
+        "packages/queue/src/index.ts"
+      ],
       "@kirimkarya/redis": [
         "packages/redis/src/index.ts"
       ],

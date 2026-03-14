@@ -12,6 +12,7 @@ const envSchema = z.object({
     DATABASE_URL: z.string().min(1),
     BETTER_AUTH_URL: z.url().default("http://localhost:3000/api/auth"),
     WEB_URL: z.url().default("http://localhost:5173"),
+    PUBLIC_API_URL: z.url().default("http://localhost:3000"),
     BETTER_AUTH_SECRET: z.string().min(1),
     GOOGLE_CLIENT_ID: z.string().optional(),
     GOOGLE_CLIENT_SECRET: z.string().optional(),

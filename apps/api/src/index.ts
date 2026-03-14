@@ -2,7 +2,6 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import { requestId } from "hono/request-id";
 import { Scalar } from "@scalar/hono-api-reference";
-import path from "node:path";
 
 import { auth } from "./modules/auth/auth.config";
 import { env } from "./env";
@@ -10,12 +9,17 @@ import { env } from "./env";
 // Middlewares
 import { loggerMiddleware } from "./core/middlewares/logger";
 import { errorHandler } from "./core/middlewares/error-handler";
+import { authMiddleware } from "./core/middlewares/auth";
 
 // Controllers
 import healthRoutes from "./modules/health/health.controller";
 import authRoutes from "./modules/auth/auth.controller";
 import storageRoutes from "./modules/storage/storage.controller";
 import imagesRoutes from "./modules/images/images.controller";
+import galleriesRoutes from "./modules/galleries/galleries.controller";
+import photosRoutes from "./modules/photos/photos.controller";
+import publicRoutes from "./modules/public/public.controller";
+import statsRoutes from "./modules/stats/stats-controller";
 
 const app = new OpenAPIHono();
 
@@ -27,12 +31,22 @@ app.use(
     cors({
         origin: [env.WEB_URL],
         allowMethods: ["POST", "GET", "OPTIONS"],
-        allowHeaders: ["Content-Type", "Authorization"],
+        allowHeaders: ["Content-Type", "Authorization", "X-Client-Id"],
         exposeHeaders: ["Content-Length"],
         credentials: true,
     })
 );
 
+app.use("/api/storage", authMiddleware);
+app.use("/api/storage/*", authMiddleware);
+app.use("/api/images", authMiddleware);
+app.use("/api/images/*", authMiddleware);
+app.use("/api/galleries", authMiddleware);
+app.use("/api/galleries/*", authMiddleware);
+app.use("/api/photos", authMiddleware);
+app.use("/api/photos/*", authMiddleware);
+app.use("/api/stats", authMiddleware);
+app.use("/api/stats/*", authMiddleware);
 
 app.onError(errorHandler);
 
@@ -71,7 +85,11 @@ const routes = app
     .route("/api/health", healthRoutes)
     .route("/api/auth", authRoutes)
     .route("/api/storage", storageRoutes)
-    .route("/api/images", imagesRoutes);
+    .route("/api/images", imagesRoutes)
+    .route("/api/galleries", galleriesRoutes)
+    .route("/api/photos", photosRoutes)
+    .route("/api/public", publicRoutes)
+    .route("/api/stats", statsRoutes);
 
 export type AppType = typeof routes;
 

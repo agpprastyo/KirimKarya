@@ -75,6 +75,7 @@
             const response = await fetch("/api/auth/upload-avatar", {
                 method: "POST",
                 body: formData,
+                credentials: "include",
             });
 
             const result = await response.json();

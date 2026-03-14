@@ -1,15 +1,13 @@
-import { S3Client, CreateBucketCommand } from "@aws-sdk/client-s3";
-export { CreateBucketCommand };
+import { S3Client } from "bun";
 import { env } from "./env";
 
 export const s3 = new S3Client({
+    accessKeyId: env.STORAGE_USER,
+    secretAccessKey: env.STORAGE_PASSWORD,
     endpoint: env.STORAGE_ENDPOINT,
+    bucket: env.STORAGE_BUCKET,
     region: env.STORAGE_REGION,
-    credentials: {
-        accessKeyId: env.STORAGE_USER,
-        secretAccessKey: env.STORAGE_PASSWORD,
-    },
-    forcePathStyle: true,
+    // Bun automatically handles path-style if needed based on endpoint
 });
 
 export * from "./env";

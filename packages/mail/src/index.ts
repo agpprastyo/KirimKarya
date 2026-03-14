@@ -11,11 +11,41 @@ const transporter = nodemailer.createTransport({
     },
 });
 
+import { 
+    galleryPublishedTemplate, 
+    photosReadyTemplate, 
+    selectionSubmittedTemplate 
+} from "./templates";
+
 export const sendEmail = async ({ to, subject, html }: { to: string, subject: string, html: string }) => {
     return transporter.sendMail({
         from: '"Kirim Karya" <no-reply@kirimkarya.com>',
         to,
         subject,
         html,
+    });
+};
+
+export const sendGalleryPublishedEmail = async (to: string, galleryTitle: string, galleryUrl: string) => {
+    return sendEmail({
+        to,
+        subject: `Your Gallery "${galleryTitle}" is Published!`,
+        html: galleryPublishedTemplate(galleryTitle, galleryUrl),
+    });
+};
+
+export const sendPhotosReadyEmail = async (to: string, galleryTitle: string, dashboardUrl: string) => {
+    return sendEmail({
+        to,
+        subject: `Photos for "${galleryTitle}" are Ready`,
+        html: photosReadyTemplate(galleryTitle, dashboardUrl),
+    });
+};
+
+export const sendSelectionSubmittedEmail = async (to: string, galleryTitle: string, selectionCount: number, dashboardUrl: string) => {
+    return sendEmail({
+        to,
+        subject: `New Client Selection for "${galleryTitle}"`,
+        html: selectionSubmittedTemplate(galleryTitle, selectionCount, dashboardUrl),
     });
 };

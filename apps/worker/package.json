@@ -4,5 +4,19 @@
     "type": "module",
     "scripts": {
         "dev": "bun run --hot src/index.ts"
+    },
+    "dependencies": {
+        "@aws-sdk/client-s3": "^3.714.0",
+        "@kirimkarya/db": "workspace:*",
+        "@kirimkarya/queue": "workspace:*",
+        "@kirimkarya/redis": "workspace:*",
+        "@kirimkarya/storage": "workspace:*",
+        "bullmq": "^5.41.0",
+        "dotenv": "^17.3.1",
+        "sharp": "^0.34.5",
+        "zod": "^4.3.6"
+    },
+    "devDependencies": {
+        "@types/bun": "latest"
     }
 }

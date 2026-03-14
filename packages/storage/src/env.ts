@@ -9,7 +9,7 @@ dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 const envSchema = z.object({
     STORAGE_USER: z.string().min(1),
     STORAGE_PASSWORD: z.string().min(1),
-    STORAGE_ENDPOINT: z.string().url(),
+    STORAGE_ENDPOINT: z.url(),
     STORAGE_BUCKET: z.string().min(1),
     STORAGE_REGION: z.string().default("us-east-1"),
 });
