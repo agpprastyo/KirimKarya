@@ -12,9 +12,9 @@ const UploadAvatarResponseSchema = z.object({
 const uploadAvatarRoute = createRoute({
     summary: "Upload Avatar",
     tags: ["Auth"],
-    description: "Upload avatar for authenticated user",
+    description: "Upload avatar for authenticated user (max 5MB, JPG/PNG/WebP)",
     method: "post",
-    path: "/upload-avatar",
+    path: "/avatar",
     request: {
         body: {
             content: {
@@ -67,7 +67,12 @@ const route = authRoutes.openapi(uploadAvatarRoute, async (c) => {
     const file = body["file"] as File;
 
     if (!file || !file.size) {
-        return c.json(apiResponse.error("File is required"), 400);
+        return c.json(apiResponse.error("No file uploaded"), 400);
+    }
+
+    const MAX_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+        return c.json(apiResponse.error("File size exceeds 5MB limit."), 400);
     }
 
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
@@ -83,9 +88,11 @@ const route = authRoutes.openapi(uploadAvatarRoute, async (c) => {
     return c.json(apiResponse.success(payload, "Avatar uploaded successfully"), 200);
 });
 
-// Better Auth Catch-all Handler (must be at the end)
-authRoutes.all("*", (c) => {
-    return auth.handler(c.req.raw);
+authRoutes.all("*", async (c) => {
+    console.log(`[AuthHandler] Handling: ${c.req.url}`);
+    const res = await auth.handler(c.req.raw);
+    console.log(`[AuthHandler] Response status: ${res.status}`);
+    return res;
 });
 
 export type AppType = typeof route;

@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { apiResponse, createApiResponseSchema, ApiErrorSchema } from "../../lib/response";
 import { galleryService } from "../galleries/galleries.service";
-import { storageService } from "../storage/storage.service";
+import { s3 } from "@kirimkarya/storage";
 import { db, photos, feedbacks, eq } from "@kirimkarya/db";
 import { photoQueue } from "@kirimkarya/queue";
 import type { HonoEnv } from "../../core/types/hono";
@@ -21,6 +21,15 @@ const uploadPhotoRoute = createRoute({
         params: z.object({
             id: z.uuid(),
         }),
+        body: {
+            content: {
+                "multipart/form-data": {
+                    schema: z.object({
+                        file: z.any().openapi({ type: "string", format: "binary" }),
+                    }),
+                },
+            },
+        },
     },
     responses: {
         202: {
@@ -45,7 +54,7 @@ const uploadPhotoRoute = createRoute({
             description: "Bad Request",
             content: {
                 "application/json": {
-                    schema: ApiErrorSchema("No file uploaded"),
+                    schema: ApiErrorSchema("Validation error"),
                 },
             },
         },
@@ -74,10 +83,19 @@ photosRoutes.openapi(uploadPhotoRoute, async (c) => {
         return c.json(apiResponse.error("No file uploaded"), 400);
     }
 
+    const MAX_SIZE = 50 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+        return c.json(apiResponse.error("File size exceeds 50MB limit."), 400);
+    }
+
+    if (!file.type.startsWith("image/")) {
+        return c.json(apiResponse.error("Only image files are allowed."), 400);
+    }
+
     const [newPhoto] = await db.insert(photos).values({
         galleryId,
         filename: file.name,
-        originalS3Key: `${user.id}/${galleryId}/original/${crypto.randomUUID()}-${file.name}`,
+        originalS3Key: `${user.id}/${galleryId}/original/${crypto.randomUUID()}-${file.name.replace(/\s+/g, "-")}`,
         status: "PENDING",
     }).returning();
 
@@ -85,7 +103,9 @@ photosRoutes.openapi(uploadPhotoRoute, async (c) => {
         return c.json(apiResponse.error("Failed to create photo record"), 500);
     }
 
-    await storageService.uploadToKey(newPhoto.originalS3Key, Buffer.from(await file.arrayBuffer()), file.type);
+    await s3.file(newPhoto.originalS3Key).write(Buffer.from(await file.arrayBuffer()), {
+        type: file.type,
+    });
 
     await db.update(photos).set({ status: "PROCESSING" }).where(eq(photos.id, newPhoto.id));
 

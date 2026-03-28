@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
 import { redis } from "@kirimkarya/redis";
-import { db, galleries, user, eq } from "@kirimkarya/db";
+import { db, galleries, user, galleryAccess, eq } from "@kirimkarya/db";
 import {
     NOTIFICATION_QUEUE,
     type NotificationJobData,
@@ -22,10 +22,18 @@ export const notificationWorker = new Worker<NotificationJobData>(
 
         switch (type) {
             case "GALLERY_PUBLISHED":
-                if (gallery.clientEmail) {
-                    const galleryUrl = `${env.WEB_URL}/g/${galleryId}`;
-                    await sendGalleryPublishedEmail(gallery.clientEmail, gallery.title, galleryUrl);
-                }
+                const accessList = await db
+                    .select()
+                    .from(galleryAccess)
+                    .where(eq(galleryAccess.galleryId, galleryId));
+
+                const galleryUrl = `${env.WEB_URL}/g/${galleryId}`;
+
+                const emailPromises = accessList.map(access =>
+                    sendGalleryPublishedEmail(access.email, gallery.title, galleryUrl)
+                );
+
+                await Promise.all(emailPromises);
                 break;
             case "PHOTOS_READY":
                 const dashboardUrl = `${env.WEB_URL}/dashboard/galleries/${galleryId}`;

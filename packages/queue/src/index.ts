@@ -3,6 +3,7 @@ import { redis } from "@kirimkarya/redis";
 
 export const PHOTO_PROCESSING_QUEUE = "photo-processing";
 export const NOTIFICATION_QUEUE = "notifications";
+export const DELIVERY_QUEUE = "delivery";
 export const CLEANUP_QUEUE = "cleanup";
 
 export interface PhotoProcessingJobData {
@@ -14,6 +15,7 @@ export interface PhotoProcessingJobData {
 
 export type NotificationType = 
     | "GALLERY_PUBLISHED"
+    | "GALLERY_DELIVERY"
     | "PHOTOS_READY"
     | "CLIENT_SELECTION_SUBMITTED";
 
@@ -56,6 +58,19 @@ export const cleanupQueue = new Queue<CleanupJobData>(CLEANUP_QUEUE, {
     connection: redis as any,
     defaultJobOptions: {
         attempts: 1,
+        removeOnComplete: true,
+        removeOnFail: false,
+    },
+});
+
+export const deliveryQueue = new Queue<NotificationJobData>(DELIVERY_QUEUE, {
+    connection: redis as any,
+    defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+            type: "exponential",
+            delay: 5000,
+        },
         removeOnComplete: true,
         removeOnFail: false,
     },

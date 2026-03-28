@@ -14,7 +14,6 @@ import { authMiddleware } from "./core/middlewares/auth";
 // Controllers
 import healthRoutes from "./modules/health/health.controller";
 import authRoutes from "./modules/auth/auth.controller";
-import storageRoutes from "./modules/storage/storage.controller";
 import imagesRoutes from "./modules/images/images.controller";
 import galleriesRoutes from "./modules/galleries/galleries.controller";
 import photosRoutes from "./modules/photos/photos.controller";
@@ -30,17 +29,13 @@ app.use(
     "/api/*",
     cors({
         origin: [env.WEB_URL],
-        allowMethods: ["POST", "GET", "OPTIONS"],
+        allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allowHeaders: ["Content-Type", "Authorization", "X-Client-Id"],
         exposeHeaders: ["Content-Length"],
         credentials: true,
     })
 );
 
-app.use("/api/storage", authMiddleware);
-app.use("/api/storage/*", authMiddleware);
-app.use("/api/images", authMiddleware);
-app.use("/api/images/*", authMiddleware);
 app.use("/api/galleries", authMiddleware);
 app.use("/api/galleries/*", authMiddleware);
 app.use("/api/photos", authMiddleware);
@@ -84,7 +79,6 @@ app.get("/api/docs/better-auth.json", async (c) => {
 const routes = app
     .route("/api/health", healthRoutes)
     .route("/api/auth", authRoutes)
-    .route("/api/storage", storageRoutes)
     .route("/api/images", imagesRoutes)
     .route("/api/galleries", galleriesRoutes)
     .route("/api/photos", photosRoutes)

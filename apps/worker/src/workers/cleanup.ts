@@ -29,7 +29,6 @@ export const cleanupWorker = new Worker<CleanupJobData>(
                     .where(eq(photos.galleryId, gallery.id));
 
                 if (galleryPhotos.length > 0) {
-                    // Delete S3 Objects using Bun's native S3 API
                     for (const photo of galleryPhotos) {
                         const keysToDelete = [photo.originalS3Key];
                         if (photo.thumbnailS3Key) keysToDelete.push(photo.thumbnailS3Key);
@@ -59,6 +58,33 @@ export const cleanupWorker = new Worker<CleanupJobData>(
                 console.error(`[Cleanup ${job.id}] Failed to cleanup gallery ${gallery.id}:`, error);
             }
         }
+
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        const expiredZips = await db
+            .select()
+            .from(galleries)
+            .where(lt(galleries.deliveredAt, sevenDaysAgo));
+
+        console.log(`[Cleanup ${job.id}] Found ${expiredZips.length} expired delivery ZIPs.`);
+
+        for (const gallery of expiredZips) {
+            if (gallery.deliveryZipKey) {
+                console.log(`[Cleanup ${job.id}] Cleaning up expired ZIP for gallery ${gallery.id}`);
+                try {
+                    const fileRef = s3.file(gallery.deliveryZipKey);
+                    if (await fileRef.exists()) {
+                        await fileRef.delete();
+                    }
+                    await db.update(galleries)
+                        .set({ deliveryZipKey: null })
+                        .where(eq(galleries.id, gallery.id));
+                } catch (e) {
+                    console.error(`[Cleanup ${job.id}] Failed to cleanup ZIP for gallery ${gallery.id}:`, e);
+                }
+            }
+        }
     },
     {
         connection: redis as any,
@@ -67,7 +93,7 @@ export const cleanupWorker = new Worker<CleanupJobData>(
 );
 
 cleanupWorker.on("completed", (job) => {
-    // Optional: quiet completion log
+    console.log(`[Cleanup ${job.id}] Completed`);
 });
 
 cleanupWorker.on("failed", (job, err) => {

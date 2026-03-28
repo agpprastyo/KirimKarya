@@ -1,4 +1,6 @@
-import { db, galleries, photos, feedbacks, eq, and, sql } from "@kirimkarya/db";
+import { db, galleries, photos, feedbacks, galleryAccess, eq, and, sql } from "@kirimkarya/db";
+import { redis } from "@kirimkarya/redis";
+import { sendOTPEmail } from "@kirimkarya/mail";
 
 export class PublicService {
     async getGalleryMetadata(id: string) {
@@ -8,8 +10,13 @@ export class PublicService {
                 title: galleries.title,
                 clientEmail: galleries.clientEmail,
                 status: galleries.status,
+                deliveryStatus: galleries.deliveryStatus,
+                isPrivate: galleries.isPrivate,
                 userId: galleries.userId,
+                accessMode: galleries.accessMode,
                 createdAt: galleries.createdAt,
+                deliveredAt: galleries.deliveredAt,
+                deliveryZipKey: galleries.deliveryZipKey,
             })
             .from(galleries)
             .where(eq(galleries.id, id));
@@ -36,7 +43,6 @@ export class PublicService {
     }
 
     async toggleFeedback(photoId: string, clientIdentifier: string, isSelected?: boolean, comment?: string) {
-        // Security Check: Ensure photo belongs to a PUBLISHED gallery
         const [photo] = await db
             .select({ id: photos.id })
             .from(photos)
@@ -45,7 +51,6 @@ export class PublicService {
 
         if (!photo) return null;
 
-        // Find existing feedback for this client if any
         const [existing] = await db
             .select()
             .from(feedbacks)
@@ -86,6 +91,82 @@ export class PublicService {
             .from(feedbacks)
             .innerJoin(photos, eq(feedbacks.photoId, photos.id))
             .where(and(eq(photos.galleryId, galleryId), eq(feedbacks.clientIdentifier, clientIdentifier)));
+    }
+
+    async requestOTP(galleryId: string, email: string) {
+        const gallery = await this.getGalleryMetadata(galleryId);
+        if (!gallery || gallery.accessMode !== "OTP") {
+            return { success: false, error: "OTP access not available for this gallery" };
+        }
+
+        const [access] = await db
+            .select()
+            .from(galleryAccess)
+            .where(and(eq(galleryAccess.galleryId, galleryId), eq(galleryAccess.email, email)));
+
+        if (!access) return { success: false, error: "Email not authorized for this gallery" };
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        const redisKey = `otp:${galleryId}:${email}`;
+        await redis.set(redisKey, otp);
+        await redis.expire(redisKey, 300);
+
+        try {
+            await sendOTPEmail(email, otp, gallery.title);
+        } catch (error) {
+            console.error("Failed to send OTP email:", error);
+            return { success: false, error: "Failed to send verification email" };
+        }
+
+        return { success: true };
+    }
+
+    async verifyOTP(galleryId: string, email: string, code: string) {
+        const redisKey = `otp:${galleryId}:${email}`;
+        const storedOtp = await redis.get(redisKey);
+
+        if (!storedOtp || storedOtp !== code) {
+            return { success: false, error: "Invalid or expired verification code" };
+        }
+
+        await redis.del(redisKey);
+
+        return { success: true };
+    }
+
+    async verifyStaticPassword(galleryId: string, email: string, password: string) {
+        const [gallery] = await db
+            .select({
+                passwordHash: galleries.passwordHash,
+                accessMode: galleries.accessMode
+            })
+            .from(galleries)
+            .where(eq(galleries.id, galleryId));
+
+        if (!gallery || gallery.accessMode !== "PASSWORD") {
+            return { success: false, error: "Static password access not available for this gallery" };
+        }
+
+        const [access] = await db
+            .select()
+            .from(galleryAccess)
+            .where(and(eq(galleryAccess.galleryId, galleryId), eq(galleryAccess.email, email)));
+
+        if (!access) {
+            return { success: false, error: "Email not authorized" };
+        }
+
+        if (!gallery.passwordHash) {
+            return { success: false, error: "Gallery has no password set" };
+        }
+
+        const isValid = await Bun.password.verify(password, gallery.passwordHash);
+        if (!isValid) {
+            return { success: false, error: "Invalid password" };
+        }
+
+        return { success: true };
     }
 }
 

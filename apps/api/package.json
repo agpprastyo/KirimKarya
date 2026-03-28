@@ -5,7 +5,8 @@
     "scripts": {
         "dev": "bun run --hot src/index.ts",
         "test:stats": "bun run src/scripts/test-stats.ts",
-        "test:security": "bun run src/scripts/test-security.ts"
+        "test:security": "bun run src/scripts/test-security.ts",
+        "seed:admin": "bun run src/scripts/seed-admin.ts"
     },
     "dependencies": {
         "@better-auth/drizzle-adapter": "^1.5.3",

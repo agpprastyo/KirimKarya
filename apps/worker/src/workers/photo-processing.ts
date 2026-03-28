@@ -9,9 +9,8 @@ import {
 } from "@kirimkarya/queue";
 import sharp from "sharp";
 
-// Optimize Sharp performance
 sharp.cache(true);
-sharp.concurrency(2); 
+sharp.concurrency(2);
 
 export const photoProcessingWorker = new Worker<PhotoProcessingJobData>(
     PHOTO_PROCESSING_QUEUE,

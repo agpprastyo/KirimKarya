@@ -12,7 +12,6 @@ export class ImagesService {
             console.log("🔍 ImagesService.getImage - S3 Key:", key);
             const fileRef = s3.file(key);
 
-            // Check if file exists to return 404 properly (optional, but good practice since bytes() might throw a different error if missing)
             const exists = await fileRef.exists();
             if (!exists) {
                 throw new HttpError(404, "Image not found");

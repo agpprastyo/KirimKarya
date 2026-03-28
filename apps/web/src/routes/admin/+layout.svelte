@@ -4,6 +4,7 @@
     import ThemeToggle from "$lib/components/ThemeToggle.svelte";
     import Avatar from "$lib/components/Avatar.svelte";
     import { goto } from "$app/navigation";
+    import { onMount } from "svelte";
     import MeshBackground from "$lib/components/MeshBackground.svelte";
     import { localizeHref } from "$lib/paraglide/runtime.js";
 
@@ -13,6 +14,17 @@
     let { children } = $props();
 
     const session = useSession();
+
+    onMount(() => {
+        if (!$session.data && !$session.isPending) {
+            goto("/login");
+            return;
+        }
+
+        if ($session.data?.user?.role !== "admin" && !$session.isPending) {
+            goto("/dashboard");
+        }
+    });
 
     const handleLogout = async () => {
         await signOut({

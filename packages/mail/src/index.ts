@@ -14,7 +14,9 @@ const transporter = nodemailer.createTransport({
 import { 
     galleryPublishedTemplate, 
     photosReadyTemplate, 
-    selectionSubmittedTemplate 
+    selectionSubmittedTemplate,
+    otpTemplate,
+    galleryDeliveredTemplate
 } from "./templates";
 
 export const sendEmail = async ({ to, subject, html }: { to: string, subject: string, html: string }) => {
@@ -23,6 +25,14 @@ export const sendEmail = async ({ to, subject, html }: { to: string, subject: st
         to,
         subject,
         html,
+    });
+};
+
+export const sendOTPEmail = async (to: string, code: string, galleryTitle: string) => {
+    return sendEmail({
+        to,
+        subject: "Your Verification Code",
+        html: otpTemplate(code, galleryTitle),
     });
 };
 
@@ -47,5 +57,13 @@ export const sendSelectionSubmittedEmail = async (to: string, galleryTitle: stri
         to,
         subject: `New Client Selection for "${galleryTitle}"`,
         html: selectionSubmittedTemplate(galleryTitle, selectionCount, dashboardUrl),
+    });
+};
+
+export const sendGalleryDeliveredEmail = async (to: string, galleryTitle: string, downloadUrl: string) => {
+    return sendEmail({
+        to,
+        subject: `Your Photos from "${galleryTitle}" are Ready!`,
+        html: galleryDeliveredTemplate(galleryTitle, downloadUrl),
     });
 };

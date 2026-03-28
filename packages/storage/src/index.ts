@@ -7,7 +7,6 @@ export const s3 = new S3Client({
     endpoint: env.STORAGE_ENDPOINT,
     bucket: env.STORAGE_BUCKET,
     region: env.STORAGE_REGION,
-    // Bun automatically handles path-style if needed based on endpoint
 });
 
 export * from "./env";

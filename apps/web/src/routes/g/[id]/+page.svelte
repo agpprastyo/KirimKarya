@@ -11,13 +11,19 @@
     let photos = $state<any[]>([]);
     let isLoading = $state(true);
     let clientId = $state("");
+    let accessRequired = $state(false);
+    let email = $state("");
+    let otp = $state("");
+    let step = $state<"email" | "otp" | "password">("email");
+    let error = $state("");
+    let isVerifying = $state(false);
+    let password = $state("");
+    let isDraft = $state(false);
 
-    // Lightbox state
     let selectedPhotoIndex = $state<number | null>(null);
 
     onMount(async () => {
         if (browser) {
-            // Get or create client identifier
             let storedId = localStorage.getItem("kirimkarya_client_id");
             if (!storedId) {
                 storedId = crypto.randomUUID();
@@ -37,9 +43,30 @@
                 }),
             ]);
 
+            if (metaRes.status === 403) {
+                const data = await metaRes.json();
+                if (data.error === "Gallery not published yet") {
+                    isDraft = true;
+                } else {
+                    accessRequired = true;
+                }
+                return;
+            }
+
             if (metaRes.ok) {
                 const data = await metaRes.json();
                 gallery = data.data;
+
+                if (gallery.isPrivate) {
+                    if (photosRes.status === 403) {
+                        accessRequired = true;
+                        if (gallery.accessMode === "PASSWORD") {
+                            step = "email";
+                        } else {
+                            step = "email";
+                        }
+                    }
+                }
             }
 
             if (photosRes.ok) {
@@ -51,13 +78,92 @@
         }
     });
 
+    async function requestAccess() {
+        error = "";
+        isVerifying = true;
+        try {
+            if (gallery.accessMode === "PASSWORD") {
+                if (email.includes("@")) {
+                    step = "password";
+                } else {
+                    error = "Please enter a valid email address.";
+                }
+            } else {
+                const res = await api.api.public.galleries[":id"][
+                    "request-access"
+                ].$post({
+                    param: { id: galleryId },
+                    json: { email },
+                });
+                if (res.ok) {
+                    step = "otp";
+                } else {
+                    const data = await res.json();
+                    error =
+                        data.message ||
+                        "Email not authorized for this gallery.";
+                }
+            }
+        } catch (e) {
+            error = "Something went wrong. Please try again.";
+        } finally {
+            isVerifying = false;
+        }
+    }
+
+    async function verifyOTP() {
+        error = "";
+        isVerifying = true;
+        try {
+            const res = await api.api.public.galleries[":id"][
+                "verify-otp"
+            ].$post({
+                param: { id: galleryId },
+                json: { email, code: otp },
+            });
+            if (res.ok) {
+                window.location.reload();
+            } else {
+                const data = await res.json();
+                error = data.message || "Invalid or expired code";
+            }
+        } catch (e) {
+            error = "Verification failed. Please try again.";
+        } finally {
+            isVerifying = false;
+        }
+    }
+
+    async function verifyPassword() {
+        error = "";
+        isVerifying = true;
+        try {
+            const res = await api.api.public.galleries[":id"][
+                "verify-password"
+            ].$post({
+                param: { id: galleryId },
+                json: { email, password },
+            });
+            if (res.ok) {
+                window.location.reload();
+            } else {
+                const data = await res.json();
+                error =
+                    data.message || "Incorrect password or unauthorized email";
+            }
+        } catch (e) {
+            error = "Verification failed. Please try again.";
+        } finally {
+            isVerifying = false;
+        }
+    }
+
     async function toggleSelection(photoId: string) {
         const photo = photos.find((p) => p.id === photoId);
         if (!photo) return;
 
         const newStatus = !photo.isSelected;
 
-        // Optimistic update
         photo.isSelected = newStatus;
 
         try {
@@ -68,7 +174,6 @@
             });
 
             if (!res.ok) {
-                // Rollback on failure
                 photo.isSelected = !newStatus;
             }
         } catch (e) {
@@ -81,7 +186,6 @@
         const photo = photos.find((p) => p.id === photoId);
         if (!photo) return;
 
-        // Optimistic update
         photo.comment = comment;
 
         if (saveTimeout) clearTimeout(saveTimeout);
@@ -115,6 +219,50 @@
         <div class="flex items-center justify-center h-screen">
             <span class="loading loading-ring loading-lg text-primary"></span>
         </div>
+    {:else if isDraft}
+        <div
+            class="min-h-screen bg-base-100 flex flex-col items-center justify-center p-6 text-center"
+        >
+            <Motion
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+            >
+                <div class="max-w-md w-full space-y-8">
+                    <div
+                        class="inline-flex items-center justify-center p-6 bg-warning/10 text-warning rounded-full mb-4"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="2"
+                            stroke="currentColor"
+                            class="size-10"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+                            />
+                        </svg>
+                    </div>
+                    <h1 class="text-5xl font-black tracking-tight">
+                        Under Construction
+                    </h1>
+                    <p class="text-xl text-base-content/40 font-medium italic">
+                        This gallery is currently in **DRAFT** mode and is not
+                        yet ready for public viewing.
+                    </p>
+                    <div class="pt-8">
+                        <a
+                            href="/"
+                            class="btn btn-ghost font-bold opacity-50 hover:opacity-100 italic underline-offset-8 underline"
+                            >Return to Home</a
+                        >
+                    </div>
+                </div>
+            </Motion>
+        </div>
     {:else if !gallery}
         <div
             class="flex flex-col items-center justify-center h-screen space-y-4"
@@ -127,6 +275,184 @@
                 class="btn btn-ghost font-bold opacity-50 hover:opacity-100 italic underline-offset-8 underline"
                 >Back Home</a
             >
+        </div>
+    {:else if accessRequired}
+        <!-- Security Wall -->
+        <div
+            class="min-h-screen bg-base-100 flex flex-col items-center justify-center p-6 text-center"
+        >
+            <Motion
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+            >
+                <div class="max-w-md w-full space-y-8">
+                    <div class="space-y-2">
+                        <div
+                            class="inline-flex items-center justify-center p-4 bg-primary/10 text-primary rounded-3xl mb-4"
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke-width="2.5"
+                                stroke="currentColor"
+                                class="size-8"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"
+                                />
+                            </svg>
+                        </div>
+                        <h2 class="text-4xl font-black tracking-tight">
+                            Private Gallery
+                        </h2>
+                        <p class="text-base-content/40 font-medium italic">
+                            This gallery is protected. Please verify your email
+                            to continue.
+                        </p>
+                    </div>
+
+                    <div
+                        class="bg-base-200/50 p-8 rounded-4xl border border-base-content/5 space-y-6"
+                    >
+                        {#if error}
+                            <div
+                                class="alert alert-error text-xs font-bold rounded-2xl animate-in shake duration-300"
+                            >
+                                {error}
+                            </div>
+                        {/if}
+
+                        {#if step === "email"}
+                            <div class="form-control w-full space-y-2">
+                                <label class="label p-0" for="access-email">
+                                    <span
+                                        class="label-text font-black uppercase text-[10px] opacity-40 ml-1"
+                                        >Your Email Address</span
+                                    >
+                                </label>
+                                <input
+                                    id="access-email"
+                                    type="email"
+                                    bind:value={email}
+                                    placeholder="your@email.com"
+                                    class="input input-lg bg-base-100 rounded-2xl font-bold border-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                />
+                                <button
+                                    class="btn btn-primary btn-lg w-full rounded-2xl font-black h-16 shadow-xl shadow-primary/20"
+                                    onclick={requestAccess}
+                                    disabled={isVerifying ||
+                                        !email.includes("@")}
+                                >
+                                    {#if isVerifying}
+                                        <span class="loading loading-spinner"
+                                        ></span>
+                                    {:else}
+                                        {gallery?.accessMode === "PASSWORD"
+                                            ? "Continue"
+                                            : "Request Access"}
+                                    {/if}
+                                </button>
+                            </div>
+                        {:else if step === "otp"}
+                            <div class="form-control w-full space-y-4">
+                                <div class="space-y-1">
+                                    <label class="label p-0" for="access-otp">
+                                        <span
+                                            class="label-text font-black uppercase text-[10px] opacity-40 ml-1"
+                                            >Verification Code</span
+                                        >
+                                    </label>
+                                    <input
+                                        id="access-otp"
+                                        type="text"
+                                        bind:value={otp}
+                                        placeholder="------"
+                                        maxlength="6"
+                                        class="input input-lg bg-base-100 rounded-2xl font-black text-center tracking-[0.5em] text-2xl border-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                    />
+                                </div>
+                                <p
+                                    class="text-[10px] font-bold opacity-40 uppercase"
+                                >
+                                    Code sent to {email}
+                                </p>
+                                <button
+                                    class="btn btn-primary btn-lg w-full rounded-2xl font-black h-16 shadow-xl shadow-primary/20"
+                                    onclick={verifyOTP}
+                                    disabled={isVerifying || otp.length < 6}
+                                >
+                                    {#if isVerifying}
+                                        <span class="loading loading-spinner"
+                                        ></span>
+                                    {:else}
+                                        Verify & Enter
+                                    {/if}
+                                </button>
+                                <button
+                                    class="btn btn-ghost btn-sm font-black opacity-40 hover:opacity-100"
+                                    onclick={() => (step = "email")}
+                                >
+                                    Change Email
+                                </button>
+                            </div>
+                        {:else if step === "password"}
+                            <div class="form-control w-full space-y-4">
+                                <div class="space-y-1">
+                                    <label
+                                        class="label p-0"
+                                        for="access-password"
+                                    >
+                                        <span
+                                            class="label-text font-black uppercase text-[10px] opacity-40 ml-1"
+                                            >Gallery Password</span
+                                        >
+                                    </label>
+                                    <input
+                                        id="access-password"
+                                        type="password"
+                                        bind:value={password}
+                                        placeholder="••••••••"
+                                        class="input input-lg bg-base-100 rounded-2xl font-bold border-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                    />
+                                </div>
+                                <p
+                                    class="text-[10px] font-bold opacity-40 uppercase"
+                                >
+                                    Access for {email}
+                                </p>
+                                <button
+                                    class="btn btn-primary btn-lg w-full rounded-2xl font-black h-16 shadow-xl shadow-primary/20"
+                                    onclick={verifyPassword}
+                                    disabled={isVerifying ||
+                                        password.length < 1}
+                                >
+                                    {#if isVerifying}
+                                        <span class="loading loading-spinner"
+                                        ></span>
+                                    {:else}
+                                        Unlock Gallery
+                                    {/if}
+                                </button>
+                                <button
+                                    class="btn btn-ghost btn-sm font-black opacity-40 hover:opacity-100"
+                                    onclick={() => (step = "email")}
+                                >
+                                    Change Email
+                                </button>
+                            </div>
+                        {/if}
+                    </div>
+
+                    <a
+                        href="/"
+                        class="btn btn-ghost btn-sm font-bold opacity-30"
+                        >Back Home</a
+                    >
+                </div>
+            </Motion>
         </div>
     {:else}
         <!-- Navigation -->
@@ -197,10 +523,10 @@
                     <Motion
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        transition={{ 
-                            duration: 0.5, 
+                        transition={{
+                            duration: 0.5,
                             delay: i * 0.05,
-                            ease: "easeOut"
+                            ease: "easeOut",
                         }}
                     >
                         <div
@@ -315,7 +641,10 @@
             <!-- Prev/Next -->
             <button
                 disabled={selectedPhotoIndex === 0}
-                onclick={() => selectedPhotoIndex !== null && selectedPhotoIndex > 0 && selectedPhotoIndex--}
+                onclick={() =>
+                    selectedPhotoIndex !== null &&
+                    selectedPhotoIndex > 0 &&
+                    selectedPhotoIndex--}
                 class="absolute left-8 btn btn-circle btn-lg btn-ghost disabled:opacity-0 transition-opacity"
                 aria-label="Previous Photo"
             >
@@ -379,12 +708,24 @@
                             saveComment(
                                 photos[selectedPhotoIndex!].id,
                                 e.currentTarget.value,
-                            )
-                        }
+                            )}
                     ></textarea>
-                    <div class="absolute right-4 bottom-4 opacity-20 pointer-events-none">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-4">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+                    <div
+                        class="absolute right-4 bottom-4 opacity-20 pointer-events-none"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="2"
+                            stroke="currentColor"
+                            class="size-4"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"
+                            />
                         </svg>
                     </div>
                 </div>

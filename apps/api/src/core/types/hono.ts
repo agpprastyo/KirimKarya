@@ -3,8 +3,11 @@ export type HonoEnv = {
         user: {
             id: string;
             email: string;
-            name?: string;
-            role?: string;
+            name: string;
+            role?: string | null;
+            image?: string | null;
+            subscriptionTier?: string | null;
+            emailVerified: boolean;
         };
         requestId: string;
     };

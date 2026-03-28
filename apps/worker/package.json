@@ -13,6 +13,7 @@
         "@kirimkarya/storage": "workspace:*",
         "bullmq": "^5.41.0",
         "dotenv": "^17.3.1",
+        "jszip": "^3.10.1",
         "sharp": "^0.34.5",
         "zod": "^4.3.6"
     },

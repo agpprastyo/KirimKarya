@@ -14,10 +14,17 @@ export class AuthService {
      */
     async uploadAvatar(file: File, userId: string): Promise<string> {
         try {
+            const currentUser = await db
+                .select({ image: user.image })
+                .from(user)
+                .where(eq(user.id, userId))
+                .limit(1);
+
+            const oldAvatarUrl = currentUser[0]?.image;
+
             const bytes = await file.arrayBuffer();
             const inputBuffer = Buffer.from(bytes);
 
-            // Resize to 512x512 square and compress to WebP
             const processedBuffer = await sharp(inputBuffer)
                 .resize(512, 512, {
                     fit: "cover",
@@ -26,22 +33,28 @@ export class AuthService {
                 .webp({ quality: 80 })
                 .toBuffer();
 
-            // S3 Upload Key
-            const filename = `avatar/${userId}.webp`;
+            const filename = `avatar/${userId}/${crypto.randomUUID()}.webp`;
             const fileRef = s3.file(filename);
 
             await fileRef.write(processedBuffer, {
                 type: "image/webp",
             });
 
-            // Construct proxy URL
             const publicUrl = `/api/images/${filename}`;
 
-            // Update database user record
             await db
                 .update(user)
                 .set({ image: publicUrl })
                 .where(eq(user.id, userId));
+
+            if (oldAvatarUrl && oldAvatarUrl.startsWith("/api/images/avatar/")) {
+                const oldKey = oldAvatarUrl.replace("/api/images/", "");
+                try {
+                    await s3.file(oldKey).delete();
+                } catch (err) {
+                    console.warn(`[Cleanup] Failed to delete old avatar at ${oldKey}:`, err);
+                }
+            }
 
             return publicUrl;
         } catch (error: any) {

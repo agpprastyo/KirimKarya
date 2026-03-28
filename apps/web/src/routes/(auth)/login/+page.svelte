@@ -1,5 +1,6 @@
 <script lang="ts">
     import { signIn } from "$lib/auth-client";
+    import { env } from "../../../env";
     import Alert from "$lib/components/Alert.svelte";
 
     let email = $state("");
@@ -21,8 +22,12 @@
                 alertRef.show("Login failed: " + error.message, "error");
             } else {
                 alertRef.show("Login successful! Welcome back.", "success");
+                
+                const userRole = data?.user?.role;
+                const redirectPath = userRole === "admin" ? "/admin" : "/dashboard";
+                
                 setTimeout(() => {
-                    window.location.href = "/dashboard";
+                    window.location.href = redirectPath;
                 }, 1000);
             }
         } finally {
@@ -35,7 +40,7 @@
         try {
             await signIn.social({
                 provider: "google",
-                callbackURL: "/dashboard",
+                callbackURL: `${env.PUBLIC_WEB_URL}/dashboard`,
             });
         } catch (err: any) {
             console.error("Login with Google failed:", err);

@@ -37,7 +37,6 @@ async function seedTestUser() {
             userId = result.user.id;
         }
 
-        // Verify email directly in DB
         await db.update(userTable)
             .set({
                 emailVerified: true

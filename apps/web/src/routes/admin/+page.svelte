@@ -1,5 +1,6 @@
 <script lang="ts">
     import { authClient } from "$lib/auth-client";
+    import { api as apiClient } from "$lib/api";
     import { onMount } from "svelte";
     import AdminStatsGrid from "$lib/components/admin/AdminStatsGrid.svelte";
     import AdminSystemStatus from "$lib/components/admin/AdminSystemStatus.svelte";
@@ -18,7 +19,6 @@
         s3: "...",
     };
 
-    import { api } from "$lib/api";
 
     onMount(async () => {
         const statsRes = await authClient.admin.listUsers({
@@ -35,7 +35,7 @@
         }
 
         try {
-            const res = await api.api.health.$get();
+            const res = await (apiClient as any).api.health.$get();
             if (res.ok) {
                 const healthData = await res.json();
                 if (healthData.data) {
