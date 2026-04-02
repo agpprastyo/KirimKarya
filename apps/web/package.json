@@ -28,7 +28,10 @@
 		"vite": "^7.3.1"
 	},
 	"dependencies": {
+		"@hono/zod-openapi": "^1.2.4",
+		"@hono/zod-validator": "^0.7.6",
 		"@inlang/paraglide-sveltekit": "1.0.0-beta.7",
+		"@tanstack/svelte-query": "^6.1.10",
 		"better-auth": "^1.5.3",
 		"hono": "^4.12.5",
 		"svelte-easy-crop": "^5.0.0",

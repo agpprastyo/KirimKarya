@@ -79,7 +79,7 @@ KirimKarya solves the heavy-computation roadblock inherent in photo processing a
 Clone the repository and install all workspace packages utilizing bun's ultra fast tooling:
 
 ```bash
-git clone https://github.com/agprastyo/kirim-karya.git
+git clone https://github.com/agpprastyo/kirim-karya.git
 cd KirimKarya
 bun install
 ```

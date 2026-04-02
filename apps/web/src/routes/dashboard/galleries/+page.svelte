@@ -1,21 +1,16 @@
 <script lang="ts">
     import { api } from "$lib/api";
-    import { onMount } from "svelte";
+    import { createQuery } from "@tanstack/svelte-query";
 
-    let galleries = $state<any[]>([]);
-    let isLoading = $state(true);
-
-    onMount(async () => {
-        try {
+    const galleriesQuery = createQuery(() => ({
+        queryKey: ["galleries", "list"],
+        queryFn: async () => {
             const res = await api.api.galleries.$get();
-            if (res.ok) {
-                const json = await res.json();
-                galleries = json.data;
-            }
-        } finally {
-            isLoading = false;
+            if (!res.ok) throw new Error("Failed to fetch galleries");
+            const json = await res.json();
+            return json.data;
         }
-    });
+    }));
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -47,7 +42,7 @@
         </a>
     </div>
 
-    {#if isLoading}
+    {#if galleriesQuery.isLoading}
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {#each Array(3) as _}
                 <div
@@ -59,7 +54,11 @@
                 </div>
             {/each}
         </div>
-    {:else if galleries.length === 0}
+    {:else if galleriesQuery.error}
+        <div class="alert alert-error">
+            <span>Error loading galleries: {galleriesQuery.error.message}</span>
+        </div>
+    {:else if !galleriesQuery.data || galleriesQuery.data.length === 0}
         <div
             class="card bg-base-100 border-2 border-dashed border-base-content/10 p-16 text-center"
         >
@@ -95,7 +94,7 @@
         </div>
     {:else}
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {#each galleries as gallery}
+            {#each galleriesQuery.data as gallery}
                 <a
                     href="/dashboard/galleries/{gallery.id}"
                     class="card bg-base-100 shadow-sm border border-base-content/5 hover:border-primary/30 transition-all group overflow-hidden"

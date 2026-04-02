@@ -36,7 +36,7 @@ const getImageRoute = createRoute({
     },
 });
 
-const route = imagesRoutes.openapi(getImageRoute, async (c) => {
+const routes = imagesRoutes.openapi(getImageRoute, async (c) => {
     const user = (c as any).get("user");
 
     const fullPath = new URL(c.req.url).pathname;
@@ -88,5 +88,5 @@ const route = imagesRoutes.openapi(getImageRoute, async (c) => {
     });
 });
 
-export type AppType = typeof route;
-export default imagesRoutes;
+export type AppType = typeof routes;
+export default routes;

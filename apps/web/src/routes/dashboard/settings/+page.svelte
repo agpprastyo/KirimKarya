@@ -399,15 +399,18 @@
                             Add an extra layer of security to your account.
                         </p>
                     </div>
-                    <div
-                        class="badge {$session.data?.user?.twoFactorEnabled
-                            ? 'badge-success'
-                            : 'badge-ghost'} font-bold"
-                    >
-                        {$session.data?.user?.twoFactorEnabled
-                            ? "Enabled"
-                            : "Disabled"}
-                    </div>
+                    {#if $session.data?.user}
+                        {@const user = $session.data.user}
+                        <div
+                            class="badge {(user as any).twoFactorEnabled
+                                ? 'badge-success'
+                                : 'badge-ghost'} font-bold"
+                        >
+                            {(user as any).twoFactorEnabled
+                                ? "Enabled"
+                                : "Disabled"}
+                        </div>
+                    {/if}
                 </div>
 
                 <div
@@ -438,28 +441,31 @@
                             verification codes.
                         </p>
                     </div>
-                    {#if $session.data?.user?.twoFactorEnabled}
-                        <button
-                            class="btn btn-outline btn-error btn-sm"
-                            onclick={() =>
-                                alertRef.show(
-                                    "Disable 2FA functionality coming soon",
-                                    "info",
-                                )}
-                        >
-                            Disable
-                        </button>
-                    {:else}
-                        <button
-                            class="btn btn-primary btn-sm"
-                            onclick={() =>
-                                alertRef.show(
-                                    "Enable 2FA functionality coming soon",
-                                    "info",
-                                )}
-                        >
-                            Enable
-                        </button>
+                    {#if $session.data?.user}
+                        {@const user = $session.data.user}
+                        {#if (user as any).twoFactorEnabled}
+                            <button
+                                class="btn btn-outline btn-error btn-sm"
+                                onclick={() =>
+                                    alertRef.show(
+                                        "Disable 2FA functionality coming soon",
+                                        "info",
+                                    )}
+                            >
+                                Disable
+                            </button>
+                        {:else}
+                            <button
+                                class="btn btn-primary btn-sm"
+                                onclick={() =>
+                                    alertRef.show(
+                                        "Enable 2FA functionality coming soon",
+                                        "info",
+                                    )}
+                            >
+                                Enable
+                            </button>
+                        {/if}
                     {/if}
                 </div>
             </div>

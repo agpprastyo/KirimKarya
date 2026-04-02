@@ -26,6 +26,9 @@
     "noPropertyAccessFromIndexSignature": false,
     "baseUrl": ".",
     "paths": {
+      "@kirimkarya/api": [
+        "apps/api/src/index.ts"
+      ],
       "@kirimkarya/db": [
         "packages/db/src/index.ts"
       ],

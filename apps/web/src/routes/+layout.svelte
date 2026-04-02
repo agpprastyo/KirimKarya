@@ -1,7 +1,19 @@
 <script lang="ts">
+  import { QueryClient, QueryClientProvider } from "@tanstack/svelte-query";
   import "../app.css";
 
-  let { children } = $props();
+  const { children } = $props();
+
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        refetchOnWindowFocus: false,
+        retry: 1,
+      },
+    },
+  });
 </script>
 
-{@render children()}
+<QueryClientProvider client={queryClient}>
+  {@render children()}
+</QueryClientProvider>

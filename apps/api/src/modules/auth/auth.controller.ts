@@ -6,7 +6,7 @@ import { authService } from "./auth.service";
 const authRoutes = new OpenAPIHono();
 
 const UploadAvatarResponseSchema = z.object({
-    url: z.url().openapi({ example: "https://my-bucket.s3.amazonaws.com/avatar.jpg" }),
+    url: z.string().url().openapi({ example: "https://my-bucket.s3.amazonaws.com/avatar.jpg" }),
 });
 
 const uploadAvatarRoute = createRoute({
@@ -20,7 +20,7 @@ const uploadAvatarRoute = createRoute({
             content: {
                 "multipart/form-data": {
                     schema: z.object({
-                        file: z.any().openapi({ type: "string", format: "binary" })
+                        file: z.string().openapi({ type: "string", format: "binary" })
                     })
                 }
             }
@@ -54,7 +54,7 @@ const uploadAvatarRoute = createRoute({
     },
 });
 
-const route = authRoutes.openapi(uploadAvatarRoute, async (c) => {
+const routes = authRoutes.openapi(uploadAvatarRoute, async (c) => {
     const session = await auth.api.getSession({
         headers: c.req.raw.headers,
     });
@@ -86,14 +86,12 @@ const route = authRoutes.openapi(uploadAvatarRoute, async (c) => {
 
     const payload = { url: publicUrl };
     return c.json(apiResponse.success(payload, "Avatar uploaded successfully"), 200);
-});
-
-authRoutes.all("*", async (c) => {
+}).all("*", async (c) => {
     console.log(`[AuthHandler] Handling: ${c.req.url}`);
     const res = await auth.handler(c.req.raw);
     console.log(`[AuthHandler] Response status: ${res.status}`);
     return res;
 });
 
-export type AppType = typeof route;
-export default authRoutes;
+export type AppType = typeof routes;
+export default routes;

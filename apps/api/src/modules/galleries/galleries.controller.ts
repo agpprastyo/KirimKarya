@@ -171,75 +171,72 @@ const deliverGalleryRoute = createRoute({
     },
 });
 
-galleriesRoutes.openapi(listGalleriesRoute, async (c) => {
-    const user = c.get("user");
-    const list = await galleryService.listByUserId(user.id);
-    return c.json(apiResponse.success(list), 200);
-});
+const routes = galleriesRoutes
+    .openapi(listGalleriesRoute, async (c) => {
+        const user = c.get("user");
+        const list = await galleryService.listByUserId(user.id);
+        return c.json(apiResponse.success(list), 200);
+    })
+    .openapi(createGalleryRoute, async (c) => {
+        const user = c.get("user");
+        const body = c.req.valid("json");
+        const newGallery = await galleryService.create(user.id, body);
+        if (!newGallery) return c.json(apiResponse.error("Failed to create gallery"), 500);
+        return c.json(apiResponse.success(newGallery), 201);
+    })
+    .openapi(getGalleryRoute, async (c) => {
+        const user = c.get("user");
+        const { id } = c.req.valid("param");
+        const gallery = await galleryService.getById(id, user.id);
+        if (!gallery) return c.json(apiResponse.error("Gallery not found"), 404);
+        return c.json(apiResponse.success(gallery), 200);
+    })
+    .openapi(updateGalleryRoute, async (c) => {
+        const user = c.get("user");
+        const { id } = c.req.valid("param");
+        const body = c.req.valid("json");
 
-galleriesRoutes.openapi(createGalleryRoute, async (c) => {
-    const user = c.get("user");
-    const body = c.req.valid("json");
-    const newGallery = await galleryService.create(user.id, body);
-    if (!newGallery) return c.json(apiResponse.error("Failed to create gallery"), 500);
-    return c.json(apiResponse.success(newGallery), 201);
-});
+        const oldGallery = await galleryService.getById(id, user.id);
+        if (!oldGallery) return c.json(apiResponse.error("Gallery not found"), 404);
 
-galleriesRoutes.openapi(getGalleryRoute, async (c) => {
-    const user = c.get("user");
-    const { id } = c.req.valid("param");
-    const gallery = await galleryService.getById(id, user.id);
-    if (!gallery) return c.json(apiResponse.error("Gallery not found"), 404);
-    return c.json(apiResponse.success(gallery), 200);
-});
+        const updatedGallery = await galleryService.update(id, user.id, body);
+        if (!updatedGallery) return c.json(apiResponse.error("Failed to update gallery"), 500);
 
-galleriesRoutes.openapi(updateGalleryRoute, async (c) => {
-    const user = c.get("user");
-    const { id } = c.req.valid("param");
-    const body = c.req.valid("json");
+        const shouldNotify = body.notify || (oldGallery.status !== "PUBLISHED" && updatedGallery.status === "PUBLISHED");
 
-    const oldGallery = await galleryService.getById(id, user.id);
-    if (!oldGallery) return c.json(apiResponse.error("Gallery not found"), 404);
+        if (shouldNotify && updatedGallery.status === "PUBLISHED") {
+            await notificationQueue.add(`gallery_notified_${id}_${Date.now()}`, {
+                type: "GALLERY_PUBLISHED",
+                galleryId: id,
+                userId: user.id,
+            });
+        }
 
-    const updatedGallery = await galleryService.update(id, user.id, body);
-    if (!updatedGallery) return c.json(apiResponse.error("Failed to update gallery"), 500);
+        return c.json(apiResponse.success(updatedGallery), 200);
+    })
+    .openapi(deliverGalleryRoute, async (c) => {
+        const user = c.get("user");
+        const { id } = c.req.valid("param");
 
-    const shouldNotify = body.notify || (oldGallery.status !== "PUBLISHED" && updatedGallery.status === "PUBLISHED");
+        const gallery = await galleryService.getById(id, user.id);
+        if (!gallery) return c.json(apiResponse.error("Gallery not found"), 404);
 
-    if (shouldNotify && updatedGallery.status === "PUBLISHED") {
-        await notificationQueue.add(`gallery_notified_${id}_${Date.now()}`, {
-            type: "GALLERY_PUBLISHED",
+        const selectionCount = await galleryService.countSelectedPhotos(id);
+        if (selectionCount === 0) {
+            return c.json(apiResponse.error("No photos selected for delivery"), 400);
+        }
+
+        // Update status to QUEUED
+        await galleryService.update(id, user.id, { deliveryStatus: "QUEUED" });
+
+        // Add delivery job
+        await deliveryQueue.add(`gallery_delivery_${id}`, {
+            type: "GALLERY_DELIVERY",
             galleryId: id,
             userId: user.id,
         });
-    }
 
-    return c.json(apiResponse.success(updatedGallery), 200);
-});
-
-galleriesRoutes.openapi(deliverGalleryRoute, async (c) => {
-    const user = c.get("user");
-    const { id } = c.req.valid("param");
-
-    const gallery = await galleryService.getById(id, user.id);
-    if (!gallery) return c.json(apiResponse.error("Gallery not found"), 404);
-
-    const selectionCount = await galleryService.countSelectedPhotos(id);
-    if (selectionCount === 0) {
-        return c.json(apiResponse.error("No photos selected for delivery"), 400);
-    }
-
-    // Update status to QUEUED
-    await galleryService.update(id, user.id, { deliveryStatus: "QUEUED" });
-
-    // Add delivery job
-    await deliveryQueue.add(`gallery_delivery_${id}`, {
-        type: "GALLERY_DELIVERY",
-        galleryId: id,
-        userId: user.id,
+        return c.json(apiResponse.success({ success: true }), 200);
     });
 
-    return c.json(apiResponse.success({ success: true }), 200);
-});
-
-export default galleriesRoutes;
+export default routes;

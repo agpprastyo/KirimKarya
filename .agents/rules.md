@@ -12,3 +12,8 @@
 ## API Structure
 1. **Controller-Level Auth**: Prefer handling specific authorization (e.g., prefix ownership checks for images) at the controller level rather than global middleware when possible for more granular control.
 2. **Zod OpenAPI**: Always use `@hono/zod-openapi` for route definitions to maintain consistent API documentation.
+3. **API Calls (Web App)**:
+    - For Better Auth API: Use `authClient` from `apps/web/src/lib/auth-client.ts`.
+    - For other API calls: Use Hono RPC client via `api` from `apps/web/src/lib/api.ts`.
+    - **Strict Rule**: Do not use direct `fetch` API for internal communication.
+4. **Type Safety**: Avoid using `any` type in the codebase. Always strive for proper TypeScript definitions, especially when dealing with API responses and component props. Use `InferResponseType` and `InferRequestType` from `hono/client` where applicable.

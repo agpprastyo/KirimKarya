@@ -4,14 +4,14 @@ import { ApiErrorSchema, apiResponse, createApiResponseSchema } from "../../lib/
 const healthRoutes = new OpenAPIHono();
 
 const HealthSchema = z.object({
-    health: z.string().openapi({ example: "ok" }),
+    health: z.string(),
     services: z.object({
-        auth: z.string().openapi({ example: "READY" }),
-        db: z.string().openapi({ example: "READY" }),
-        redis: z.string().openapi({ example: "READY" }),
-        s3: z.string().openapi({ example: "READY" }),
+        auth: z.string(),
+        db: z.string(),
+        redis: z.string(),
+        s3: z.string(),
     }),
-    timestamp: z.string().openapi({ example: "2024-01-01T00:00:00.000Z" }),
+    timestamp: z.string(),
 });
 
 const getHealthRoute = createRoute({
@@ -55,4 +55,4 @@ const app = healthRoutes.openapi(getHealthRoute, (c) => {
 });
 
 export type AppType = typeof app;
-export default healthRoutes;
+export default app;

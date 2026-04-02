@@ -20,13 +20,15 @@ import photosRoutes from "./modules/photos/photos.controller";
 import publicRoutes from "./modules/public/public.controller";
 import statsRoutes from "./modules/stats/stats-controller";
 
-const app = new OpenAPIHono();
+import type { HonoEnv } from "./core/types/hono";
+
+export const app = new OpenAPIHono<HonoEnv>().basePath("/api");
 
 // Global Middlewares
 app.use("*", requestId());
 app.use("*", loggerMiddleware());
 app.use(
-    "/api/*",
+    "/*",
     cors({
         origin: [env.WEB_URL],
         allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -36,17 +38,17 @@ app.use(
     })
 );
 
-app.use("/api/galleries", authMiddleware);
-app.use("/api/galleries/*", authMiddleware);
-app.use("/api/photos", authMiddleware);
-app.use("/api/photos/*", authMiddleware);
-app.use("/api/stats", authMiddleware);
-app.use("/api/stats/*", authMiddleware);
+app.use("/galleries", authMiddleware);
+app.use("/galleries/*", authMiddleware);
+app.use("/photos", authMiddleware);
+app.use("/photos/*", authMiddleware);
+app.use("/stats", authMiddleware);
+app.use("/stats/*", authMiddleware);
 
 app.onError(errorHandler);
 
 app.get(
-    "/api/docs",
+    "/docs",
     Scalar({
         pageTitle: "Kirim Karya API Documentation",
         theme: "kepler",
@@ -58,7 +60,7 @@ app.get(
     })
 );
 
-app.doc("/api/docs/open-api", {
+app.doc("/docs/open-api", {
     openapi: "3.0.0",
     info: {
         version: "1.0.0",
@@ -67,7 +69,7 @@ app.doc("/api/docs/open-api", {
     },
 });
 
-app.get("/api/docs/better-auth.json", async (c) => {
+app.get("/docs/better-auth.json", async (c) => {
     try {
         const schema = await auth.api.generateOpenAPISchema();
         return c.json(schema);
@@ -77,13 +79,13 @@ app.get("/api/docs/better-auth.json", async (c) => {
 });
 
 const routes = app
-    .route("/api/health", healthRoutes)
-    .route("/api/auth", authRoutes)
-    .route("/api/images", imagesRoutes)
-    .route("/api/galleries", galleriesRoutes)
-    .route("/api/photos", photosRoutes)
-    .route("/api/public", publicRoutes)
-    .route("/api/stats", statsRoutes);
+    .route("/health", healthRoutes)
+    .route("/auth", authRoutes)
+    .route("/images", imagesRoutes)
+    .route("/galleries", galleriesRoutes)
+    .route("/photos", photosRoutes)
+    .route("/public", publicRoutes)
+    .route("/stats", statsRoutes);
 
 export type AppType = typeof routes;
 

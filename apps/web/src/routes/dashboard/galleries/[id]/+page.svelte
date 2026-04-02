@@ -1,26 +1,66 @@
 <script lang="ts">
     import { page } from "$app/state";
-    import { api as apiClient } from "$lib/api";
-    import { onMount } from "svelte";
+    import { api as apiClient, handleResponse } from "$lib/api";
+    import { createQuery, createMutation, useQueryClient } from "@tanstack/svelte-query";
     import { Motion, AnimatePresence } from "svelte-motion";
     import Alert from "$lib/components/Alert.svelte";
     import UploadStatus from "$lib/components/UploadStatus.svelte";
 
-    let galleryId = page.params.id;
-    let gallery = $state<any>(null);
-    let isLoading = $state(true);
+    const galleryId = page.params.id;
+    const queryClient = useQueryClient();
+    let alertRef = $state<{
+        show: (message: string, type: "success" | "error") => void;
+    } | null>(null);
+
+    // -- QUERIES --
+
+    const galleryQuery = createQuery(() => ({
+        queryKey: ["galleries", galleryId],
+        queryFn: () => handleResponse(apiClient.api.galleries[":id"].$get({
+            param: { id: galleryId },
+        })).then(res => res.data)
+    }));
+
+    const photosQuery = createQuery(() => ({
+        queryKey: ["galleries", galleryId, "photos"],
+        queryFn: () => handleResponse(apiClient.api.photos.galleries[":id"].photos.$get({
+            param: { id: galleryId },
+        })).then(res => res.data)
+    }));
+
+    // -- MUTATIONS --
+
+    const updateGalleryMutation = createMutation(() => ({
+        mutationFn: (payload: any) => handleResponse(apiClient.api.galleries[":id"].$put({
+            param: { id: galleryId },
+            json: payload,
+        })).then(res => res.data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["galleries", galleryId] });
+        }
+    }));
+
+    const deliverMutation = createMutation(() => ({
+        mutationFn: () => handleResponse(apiClient.api.galleries[":id"].deliver.$post({
+            param: { id: galleryId },
+        })),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["galleries", galleryId] });
+            alertRef?.show("Delivery process started! We will notify clients once ZIP is ready.", "success");
+        },
+        onError: (error: Error) => {
+            alertRef?.show(error.message, "error");
+        }
+    }));
+
+    // -- UI STATE --
+
     let isUploading = $state(false);
     let uploadStats = $state({ total: 0, completed: 0, failed: 0 });
     let files = $state<FileList | null>(null);
 
-    let photoList = $state<any[]>([]);
-    let isPhotosLoading = $state(true);
-
     let isSettingsOpen = $state(false);
     let settingsError = $state("");
-    let isSaving = $state(false);
-    let isDelivering = $state(false);
-    let alertRef = $state<any>(null);
 
     let editForm = $state({
         title: "",
@@ -33,31 +73,17 @@
         expiresAt: "",
     });
 
-    async function fetchPhotos() {
-        try {
-            const res = await (apiClient as any).api.photos.galleries[
-                ":id"
-            ].photos.$get({
-                param: { id: galleryId },
-            });
-            if (res.ok) {
-                const data = await res.json();
-                photoList = data.data;
-            }
-        } finally {
-            isPhotosLoading = false;
-        }
-    }
-
     function openSettings() {
+        const gallery = galleryQuery.data;
+        if (!gallery) return;
         editForm = {
             title: gallery.title,
             clientEmail: gallery.clientEmail || "",
-            status: gallery.status || "DRAFT",
+            status: (gallery.status as any) || "DRAFT",
             isPrivate: gallery.isPrivate || false,
-            accessMode: gallery.accessMode || "OTP",
+            accessMode: (gallery.accessMode as any) || "OTP",
             allowedEmails: (gallery.allowedEmails || []).join(", "),
-            password: "", // Don't show existing password
+            password: "",
             expiresAt: gallery.expiresAt
                 ? new Date(gallery.expiresAt).toISOString().split("T")[0]
                 : "",
@@ -65,16 +91,15 @@
         isSettingsOpen = true;
     }
 
-    async function saveSettings(notify: boolean = false) {
-        isSaving = true;
+    async function handleSaveSettings(notify: boolean = false) {
         settingsError = "";
         try {
-            const payload: any = {
+            const payload = {
                 title: editForm.title,
                 clientEmail: editForm.clientEmail || null,
-                status: editForm.status,
+                status: editForm.status as any,
                 isPrivate: editForm.isPrivate,
-                accessMode: editForm.accessMode,
+                accessMode: editForm.accessMode as any,
                 allowedEmails: editForm.allowedEmails
                     ? editForm.allowedEmails
                           .split(/[,\s]+/)
@@ -84,78 +109,34 @@
                     ? new Date(editForm.expiresAt).toISOString()
                     : null,
                 notify: notify,
+                password:
+                    editForm.password && editForm.password.length >= 4
+                        ? editForm.password
+                        : undefined,
             };
 
-            if (editForm.password && editForm.password.length >= 4) {
-                payload.password = editForm.password;
-            }
-
-            const res = await (apiClient as any).api.galleries[":id"].$put({
-                //@ts-ignore
-                param: { id: galleryId },
-                json: payload,
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                gallery = data.data;
-                isSettingsOpen = false;
-                alertRef.show(
-                    notify
-                        ? "Settings saved and clients notified!"
-                        : "Settings updated successfully!",
-                    "success",
-                );
-            } else {
-                const err = await res.json();
-                settingsError = err.error || "Failed to update settings";
-            }
+            await updateGalleryMutation.mutateAsync(payload);
+            isSettingsOpen = false;
+            alertRef?.show(
+                notify
+                    ? "Settings saved and clients notified!"
+                    : "Settings updated successfully!",
+                "success",
+            );
         } catch (e: any) {
             settingsError = e.message;
-        } finally {
-            isSaving = false;
-        }
-    }
-
-    onMount(async () => {
-        await refreshGallery();
-    });
-
-    async function refreshGallery() {
-        try {
-            const res = await (apiClient as any).api.galleries[":id"].$get({
-                param: { id: galleryId },
-            });
-            if (res.ok) {
-                const data = await res.json();
-                gallery = data.data;
-            }
-            await fetchPhotos();
-        } finally {
-            isLoading = false;
         }
     }
 
     // Polling for delivery status
     $effect(() => {
+        const gallery = galleryQuery.data;
         if (
             gallery?.deliveryStatus === "QUEUED" ||
             gallery?.deliveryStatus === "PROCESSING"
         ) {
-            const interval = setInterval(async () => {
-                const res = await (apiClient as any).api.galleries[":id"].$get({
-                    param: { id: galleryId },
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    gallery = data.data;
-                    if (
-                        gallery.deliveryStatus === "COMPLETED" ||
-                        gallery.deliveryStatus === "FAILED"
-                    ) {
-                        clearInterval(interval);
-                    }
-                }
+            const interval = setInterval(() => {
+                queryClient.invalidateQueries({ queryKey: ["galleries", galleryId] });
             }, 3000);
             return () => clearInterval(interval);
         }
@@ -163,11 +144,14 @@
 
     // Refresh photo status every 5 seconds if there are processing photos
     $effect(() => {
+        const photoList = photosQuery.data || [];
         const hasProcessing = photoList.some(
             (p) => p.status === "PENDING" || p.status === "PROCESSING",
         );
         if (hasProcessing) {
-            const interval = setInterval(fetchPhotos, 5000);
+            const interval = setInterval(() => {
+                queryClient.invalidateQueries({ queryKey: ["galleries", galleryId, "photos"] });
+            }, 5000);
             return () => clearInterval(interval);
         }
     });
@@ -178,7 +162,7 @@
         const fileArray = Array.from(files);
         isUploading = true;
         uploadStats = { total: fileArray.length, completed: 0, failed: 0 };
-        files = null; // Clear input
+        files = null;
 
         const CONCURRENCY = 4;
         const queue = [...fileArray];
@@ -189,23 +173,19 @@
                 const formData = new FormData();
                 formData.append("file", file);
 
-                const res = await fetch(
-                    `${(apiClient as any).api.photos.galleries[
-                        ":id"
-                    ].photos.$url({
-                        param: { id: galleryId },
-                    })}`,
-                    {
-                        method: "POST",
-                        body: formData,
-                        credentials: "include",
-                    },
-                );
+                const url = apiClient.api.photos.galleries[":id"].photos.$url({
+                    param: { id: galleryId },
+                });
+
+                const res = await fetch(url.toString(), {
+                    method: "POST",
+                    body: formData,
+                    credentials: "include",
+                });
 
                 if (res.ok) {
                     uploadStats.completed++;
-                    // Non-blocking refresh to show thumbnails as they appear
-                    fetchPhotos();
+                    queryClient.invalidateQueries({ queryKey: ["galleries", galleryId, "photos"] });
                 } else {
                     uploadStats.failed++;
                 }
@@ -226,13 +206,8 @@
             await Promise.race(activeUploads);
         }
 
-        // Wait a bit then hide overlay or keep it as "Finished"
         setTimeout(() => {
-            if (
-                uploadStats.completed + uploadStats.failed ===
-                uploadStats.total
-            ) {
-                // Keep it for 3 seconds if finished
+            if (uploadStats.completed + uploadStats.failed === uploadStats.total) {
                 setTimeout(() => {
                     if (!isUploading)
                         uploadStats = { total: 0, completed: 0, failed: 0 };
@@ -241,57 +216,36 @@
             isUploading = false;
         }, 500);
 
-        await fetchPhotos();
+        queryClient.invalidateQueries({ queryKey: ["galleries", galleryId, "photos"] });
     }
 
     function copyShareLink() {
         const url = `${window.location.origin}/g/${galleryId}`;
         navigator.clipboard.writeText(url);
-        alertRef.show("Public link copied to clipboard!", "success");
-    }
-
-    async function startDelivery() {
-        if (isDelivering) return;
-        isDelivering = true;
-        try {
-            const res = await (apiClient as any).api.galleries[
-                ":id"
-            ].deliver.$post({
-                param: { id: galleryId },
-            });
-            if (res.ok) {
-                alertRef.show(
-                    "Delivery process started! We will notify clients once ZIP is ready.",
-                    "success",
-                );
-                await refreshGallery();
-            } else {
-                const err = await res.json();
-                alertRef.show(err.error || "Failed to start delivery", "error");
-            }
-        } catch (e: any) {
-            alertRef.show(e.message, "error");
-        } finally {
-            isDelivering = false;
-        }
+        alertRef?.show("Public link copied to clipboard!", "success");
     }
 </script>
 
 <Alert bind:this={alertRef} />
 
 <div class="space-y-12 pb-20">
-    {#if isLoading}
+    {#if galleryQuery.isLoading}
         <div class="animate-pulse space-y-8">
             <div class="h-10 bg-base-200 rounded w-1/3"></div>
             <div class="h-64 bg-base-100 rounded-3xl"></div>
         </div>
-    {:else if !gallery}
+    {:else if galleryQuery.error}
+        <div class="alert alert-error">
+            <span>Error loading gallery: {galleryQuery.error.message}</span>
+        </div>
+    {:else if !galleryQuery.data}
         <div class="text-center py-20">
             <h1 class="text-2xl font-bold italic opacity-30">
                 Gallery not found
             </h1>
         </div>
     {:else}
+        {@const gallery = galleryQuery.data}
         <!-- Header -->
         <Motion
             initial={{ opacity: 0, y: -20 }}
@@ -421,13 +375,13 @@
                         <div class="flex items-center justify-between mb-8">
                             <h3 class="text-xl font-black">Managed Photos</h3>
                             <button
-                                onclick={fetchPhotos}
+                                onclick={() => queryClient.invalidateQueries({ queryKey: ["galleries", galleryId, "photos"] })}
                                 class="btn btn-ghost btn-xs font-black"
                                 >Refresh Status</button
                             >
                         </div>
 
-                        {#if isPhotosLoading}
+                        {#if photosQuery.isLoading}
                             <div class="grid grid-cols-4 gap-4">
                                 {#each Array(4) as _}
                                     <div
@@ -435,7 +389,7 @@
                                     ></div>
                                 {/each}
                             </div>
-                        {:else if photoList.length === 0}
+                        {:else if !photosQuery.data || photosQuery.data.length === 0}
                             <div
                                 class="aspect-video bg-base-200 rounded-2xl flex items-center justify-center border-2 border-dashed border-base-content/5 opacity-30 italic font-bold"
                             >
@@ -443,7 +397,7 @@
                             </div>
                         {:else}
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                {#each photoList as photo}
+                                {#each photosQuery.data as photo}
                                     <Motion
                                         initial={{ opacity: 0, scale: 0.9 }}
                                         animate={{ opacity: 1, scale: 1 }}
@@ -530,7 +484,7 @@
                                 TOTAL PHOTOS
                             </p>
                             <p class="text-3xl font-black">
-                                {photoList.length}
+                                {photosQuery.data?.length || 0}
                             </p>
                         </div>
                         <div class="bg-primary/5 p-6 rounded-3xl text-primary">
@@ -538,8 +492,7 @@
                                 SELECTED
                             </p>
                             <p class="text-3xl font-black">
-                                {photoList.filter((p) => p.selectionCount > 0)
-                                    .length}
+                                {(photosQuery.data || []).filter((p) => p.selectionCount > 0).length}
                             </p>
                         </div>
                     </div>
@@ -587,11 +540,11 @@
                                 >
                             </div>
                             <button
-                                onclick={startDelivery}
+                                onclick={() => deliverMutation.mutate()}
                                 class="btn btn-white w-full rounded-2xl font-black h-14"
-                                disabled={isDelivering}
+                                disabled={deliverMutation.isPending}
                             >
-                                {#if isDelivering}
+                                {#if deliverMutation.isPending}
                                     <span
                                         class="loading loading-spinner loading-xs"
                                     ></span>
@@ -625,12 +578,11 @@
                         </div>
                     {:else}
                         <button
-                            onclick={startDelivery}
+                            onclick={() => deliverMutation.mutate()}
                             class="btn btn-white w-full rounded-2xl font-black h-14"
-                            disabled={isDelivering ||
-                                gallery.selectionCount === 0}
+                            disabled={deliverMutation.isPending || gallery.selectionCount === 0}
                         >
-                            {#if isDelivering}
+                            {#if deliverMutation.isPending}
                                 <span class="loading loading-spinner loading-xs"
                                 ></span>
                             {:else}
@@ -785,10 +737,7 @@
                                         onclick={() =>
                                             (editForm.accessMode = "OTP")}
                                     >
-                                        OTP Code
-                                        <div class="text-[8px] opacity-60">
-                                            Secure via Email
-                                        </div>
+                                        One-Time Password (Email)
                                     </button>
                                     <button
                                         class="btn btn-outline rounded-2xl font-black {editForm.accessMode ===
@@ -798,64 +747,56 @@
                                         onclick={() =>
                                             (editForm.accessMode = "PASSWORD")}
                                     >
-                                        Static Password
-                                        <div class="text-[8px] opacity-60">
-                                            One key for all
-                                        </div>
+                                        Shared Password
                                     </button>
                                 </div>
                             </div>
 
-                            <div class="form-control w-full">
-                                <label class="label" for="allowed-emails"
-                                    ><span
-                                        class="label-text font-black uppercase text-[10px] opacity-40"
-                                        >Authorized Access Emails (Whitelist)</span
-                                    ></label
-                                >
-                                <textarea
-                                    id="allowed-emails"
-                                    bind:value={editForm.allowedEmails}
-                                    placeholder="client@gmail.com, assistant@gmail.com"
-                                    class="textarea textarea-bordered rounded-2xl font-bold h-24"
-                                ></textarea>
-                                <p
-                                    class="text-[9px] mt-2 opacity-50 font-bold uppercase italic"
-                                >
-                                    * These emails will be allowed to request
-                                    OTP or enter password.
-                                </p>
-                            </div>
+                            {#if editForm.accessMode === "OTP"}
+                                <div class="form-control w-full">
+                                    <label class="label" for="allowed-emails"
+                                        ><span
+                                            class="label-text font-black uppercase text-[10px] opacity-40"
+                                            >Allowed Guest Emails (Comma
+                                            separated)</span
+                                        ></label
+                                    >
+                                    <textarea
+                                        id="allowed-emails"
+                                        bind:value={editForm.allowedEmails}
+                                        class="textarea textarea-bordered rounded-2xl font-bold h-24"
+                                        placeholder="friend@mail.com, mom@mail.com"
+                                    ></textarea>
+                                </div>
+                            {:else}
+                                <div class="form-control w-full">
+                                    <label class="label" for="access-password"
+                                        ><span
+                                            class="label-text font-black uppercase text-[10px] opacity-40"
+                                            >Guest Password (Min 4 chars)</span
+                                        ></label
+                                    >
+                                    <input
+                                        id="access-password"
+                                        type="password"
+                                        bind:value={editForm.password}
+                                        placeholder="Keep empty to leave unchanged"
+                                        class="input input-bordered rounded-2xl font-bold"
+                                    />
+                                </div>
+                            {/if}
                         </div>
                     {/if}
-                </div>
 
-                <!-- Security & Exp -->
-                <div class="grid md:grid-cols-2 gap-4">
                     <div class="form-control w-full">
-                        <label class="label" for="gallery-password"
+                        <label class="label" for="expiry-date"
                             ><span
                                 class="label-text font-black uppercase text-[10px] opacity-40"
-                                >Protection Password (Optional)</span
+                                >Expiry Date (Optional)</span
                             ></label
                         >
                         <input
-                            id="gallery-password"
-                            type="password"
-                            bind:value={editForm.password}
-                            placeholder="••••••••"
-                            class="input input-bordered rounded-2xl font-bold"
-                        />
-                    </div>
-                    <div class="form-control w-full">
-                        <label class="label" for="gallery-expires"
-                            ><span
-                                class="label-text font-black uppercase text-[10px] opacity-40"
-                                >Expiration Date</span
-                            ></label
-                        >
-                        <input
-                            id="gallery-expires"
+                            id="expiry-date"
                             type="date"
                             bind:value={editForm.expiresAt}
                             class="input input-bordered rounded-2xl font-bold"
@@ -864,35 +805,44 @@
                 </div>
             </div>
 
-            <div class="modal-action mt-8 flex flex-wrap gap-2 justify-end">
+            <div class="modal-action flex justify-between mt-10">
                 <button
-                    class="btn btn-ghost rounded-2xl font-black px-6"
+                    class="btn btn-ghost rounded-2xl font-black hover:bg-error/10 hover:text-error"
                     onclick={() => (isSettingsOpen = false)}>Cancel</button
                 >
-                <button
-                    class="btn btn-primary btn-outline rounded-2xl font-black px-8 h-14"
-                    onclick={() => saveSettings(true)}
-                    disabled={isSaving}
-                >
-                    Save & Notify Clients
-                </button>
-                <button
-                    class="btn btn-primary rounded-2xl font-black px-12 h-14 shadow-xl shadow-primary/20"
-                    onclick={() => saveSettings(false)}
-                    disabled={isSaving}
-                >
-                    {#if isSaving}
-                        <span class="loading loading-spinner"></span>
-                    {:else}
-                        Save Settings
-                    {/if}
-                </button>
+                <div class="flex gap-3">
+                    <button
+                        onclick={() => handleSaveSettings(false)}
+                        disabled={updateGalleryMutation.isPending}
+                        class="btn btn-ghost border border-base-content/10 rounded-2xl font-black px-6"
+                    >
+                        {#if updateGalleryMutation.isPending}
+                            <span class="loading loading-spinner loading-xs"
+                            ></span>
+                        {:else}
+                            Save Only
+                        {/if}
+                    </button>
+                    <button
+                        onclick={() => handleSaveSettings(true)}
+                        disabled={updateGalleryMutation.isPending}
+                        class="btn btn-primary rounded-2xl font-black px-10 shadow-xl shadow-primary/20"
+                    >
+                        {#if updateGalleryMutation.isPending}
+                            <span class="loading loading-spinner loading-xs"
+                            ></span>
+                        {:else}
+                            Save & Notify Clients
+                        {/if}
+                    </button>
+                </div>
             </div>
         </div>
-        <button
-            class="modal-backdrop bg-black/40 backdrop-blur-sm focus:outline-none"
-            onclick={() => (isSettingsOpen = false)}
-            aria-label="Close Settings Modal"
-        ></button>
     </div>
 {/if}
+
+<style>
+    :global(body) {
+        background-color: #fafafa;
+    }
+</style>

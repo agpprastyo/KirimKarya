@@ -1,18 +1,16 @@
 <script lang="ts">
     import { api } from "$lib/api";
     import { goto } from "$app/navigation";
+    import { createMutation, useQueryClient } from "@tanstack/svelte-query";
+
+    const queryClient = useQueryClient();
 
     let title = $state("");
     let clientEmail = $state("");
-    let isSubmitting = $state(false);
     let error = $state("");
 
-    async function handleSubmit(e: SubmitEvent) {
-        e.preventDefault();
-        isSubmitting = true;
-        error = "";
-
-        try {
+    const createGalleryMutation = createMutation(() => ({
+        mutationFn: async () => {
             const res = await api.api.galleries.$post({
                 json: {
                     title,
@@ -20,19 +18,26 @@
                 },
             });
 
-            if (res.ok) {
-                const data = await res.json();
-                //@ts-ignore - ID exists in success response
-                goto(`/dashboard/galleries/${data.data.id}`);
-            } else {
-                const err = await res.json();
-                error = err.message || "Failed to create gallery";
+            if (!res.ok) {
+                const err = (await res.json()) as any;
+                throw new Error(err.message || "Failed to create gallery");
             }
-        } catch (e: any) {
-            error = e.message || "An unexpected error occurred";
-        } finally {
-            isSubmitting = false;
+            const json = await res.json();
+            return json.data;
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ["galleries", "list"] });
+            goto(`/dashboard/galleries/${data.id}`);
+        },
+        onError: (e: Error) => {
+            error = e.message;
         }
+    }));
+
+    function handleSubmit(e: SubmitEvent) {
+        e.preventDefault();
+        error = "";
+        createGalleryMutation.mutate();
     }
 </script>
 
@@ -97,23 +102,24 @@
                 id="email"
                 bind:value={clientEmail}
                 placeholder="client@example.com"
+                aria-describedby="email-description"
                 class="input input-bordered w-full rounded-2xl bg-base-200/50 border-none font-medium h-14"
             />
-            <label class="label">
+            <div id="email-description" class="label">
                 <span class="label-text-alt opacity-50 font-medium"
                     >We'll use this to notify your client when the gallery is
                     ready.</span
                 >
-            </label>
+            </div>
         </div>
 
         <div class="pt-6">
             <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={createGalleryMutation.isPending}
                 class="btn btn-primary w-full rounded-2xl h-14 font-black shadow-lg shadow-primary/20"
             >
-                {#if isSubmitting}
+                {#if createGalleryMutation.isPending}
                     <span class="loading loading-spinner"></span>
                     Creating...
                 {:else}

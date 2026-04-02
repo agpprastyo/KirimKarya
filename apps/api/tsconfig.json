@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowJs": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@kirimkarya/db": ["../../packages/db/src/index.ts"],
+      "@kirimkarya/mail": ["../../packages/mail/src/index.ts"],
+      "@kirimkarya/queue": ["../../packages/queue/src/index.ts"],
+      "@kirimkarya/redis": ["../../packages/redis/src/index.ts"],
+      "@kirimkarya/storage": ["../../packages/storage/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

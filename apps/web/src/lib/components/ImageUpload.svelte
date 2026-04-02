@@ -1,28 +1,28 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import Cropper from "svelte-easy-crop";
+    import { getContext } from "svelte";
     import type { OnCropCompleteEvent } from "svelte-easy-crop";
+    import { api as apiClient } from "$lib/api";
 
-    export let value = "";
-    export let label = "Avatar Source";
-    export let placeholder = "https://images.unsplash.com/...";
-    export let disabled = false;
-
-    const dispatch = createEventDispatcher<{
-        change: string;
-        uploading: boolean;
-    }>();
+    let { 
+        value = $bindable(""), 
+        label = "Avatar Source", 
+        placeholder = "https://images.unsplash.com/...", 
+        disabled = false,
+        onchange = (val: string) => {},
+        onuploading = (state: boolean) => {}
+    } = $props();
 
     let fileInput: HTMLInputElement;
-    let uploading = false;
-    let error = "";
+    let uploading = $state(false);
+    let error = $state("");
 
     // Cropping state
-    let imageFile: string | null = null;
-    let crop = { x: 0, y: 0 };
-    let zoom = 1;
-    let pixelCrop: any = null;
-    let showCropper = false;
+    let imageFile = $state<string | null>(null);
+    let crop = $state({ x: 0, y: 0 });
+    let zoom = $state(1);
+    let pixelCrop = $state<OnCropCompleteEvent["pixels"] | null>(null);
+    let showCropper = $state(false);
 
     // Portal action to move modal to body
     function portal(node: HTMLElement) {
@@ -36,7 +36,7 @@
         };
     }
 
-    function onFileSelected(e: CustomEvent | Event) {
+    function onFileSelected(e: Event) {
         const target = e.target as HTMLInputElement;
         const file = target.files?.[0];
         if (file) {
@@ -49,7 +49,6 @@
         }
     }
 
-    // Fixed signature for svelte-easy-crop v5
     function onCropComplete(event: OnCropCompleteEvent) {
         if (event && event.pixels) {
             pixelCrop = event.pixels;
@@ -65,25 +64,22 @@
         uploading = true;
         error = "";
         showCropper = false;
-        dispatch("uploading", true);
+        onuploading(true);
 
         try {
             const croppedImage = await getCroppedImg(imageFile, pixelCrop);
-            const formData = new FormData();
-            formData.append("file", croppedImage, "avatar.webp");
-
-            const response = await fetch("/api/auth/upload-avatar", {
-                method: "POST",
-                body: formData,
-                credentials: "include",
+            const res = await apiClient.api.auth.avatar.$post({
+                form: {
+                    file: croppedImage as any,
+                },
             });
 
-            const result = await response.json();
-
-            if (response.ok && result.data?.url) {
+            if (res.ok) {
+                const result = await res.json();
                 value = result.data.url;
-                dispatch("change", value);
+                onchange(value);
             } else {
+                const result = await res.json();
                 error = result.message || "Upload failed";
             }
         } catch (e) {
@@ -91,14 +87,14 @@
             error = "Connection error";
         } finally {
             uploading = false;
-            dispatch("uploading", false);
+            onuploading(false);
             imageFile = null;
         }
     }
 
     async function getCroppedImg(
         imageSrc: string,
-        pixelCrop: any,
+        pixelCrop: NonNullable<OnCropCompleteEvent["pixels"]>,
     ): Promise<Blob> {
         const image = new Image();
         image.src = imageSrc;
@@ -157,14 +153,14 @@
                     : ''}"
                 bind:value
                 {disabled}
-                on:input={() => dispatch("change", value)}
+                oninput={() => onchange(value)}
             />
         </div>
 
         <button
             type="button"
             class="h-16 px-8 min-w-[140px] rounded-xl bg-primary text-primary-content font-black text-xs uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shrink-0 shadow-lg shadow-primary/20"
-            on:click={() => fileInput.click()}
+            onclick={() => fileInput.click()}
             disabled={uploading || disabled}
         >
             {#if uploading}
@@ -203,7 +199,7 @@
         class="hidden"
         accept="image/*"
         bind:this={fileInput}
-        on:change={onFileSelected}
+        onchange={onFileSelected}
     />
 </div>
 
@@ -225,7 +221,7 @@
                 </h3>
                 <button
                     class="btn btn-ghost btn-circle"
-                    on:click={() => (showCropper = false)}
+                    onclick={() => (showCropper = false)}
                     title="Close"
                     aria-label="Close"
                 >
@@ -279,11 +275,11 @@
                 <div class="flex gap-4">
                     <button
                         class="btn btn-ghost flex-1 rounded-xl font-black h-14"
-                        on:click={() => (showCropper = false)}>Cancel</button
+                        onclick={() => (showCropper = false)}>Cancel</button
                     >
                     <button
                         class="btn btn-primary flex-1 rounded-xl font-black h-14 shadow-lg shadow-primary/20"
-                        on:click={handleUpload}>Confirm & Upload</button
+                        onclick={handleUpload}>Confirm & Upload</button
                     >
                 </div>
             </div>

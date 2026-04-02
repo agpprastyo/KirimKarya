@@ -22,10 +22,10 @@ const getStatsSummaryRoute = createRoute({
     },
 });
 
-statsRoutes.openapi(getStatsSummaryRoute, async (c) => {
+const routes = statsRoutes.openapi(getStatsSummaryRoute, async (c) => {
     const user = c.get("user");
     const summary = await statsService.getSummary(user.id);
     return c.json(apiResponse.success(summary), 200);
 });
 
-export default statsRoutes;
+export default routes;

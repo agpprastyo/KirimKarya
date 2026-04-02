@@ -6,12 +6,13 @@
         "dev": "bun run --hot src/index.ts",
         "test:stats": "bun run src/scripts/test-stats.ts",
         "test:security": "bun run src/scripts/test-security.ts",
-        "seed:admin": "bun run src/scripts/seed-admin.ts"
+        "seed:admin": "bun run src/scripts/seed-admin.ts",
+        "openapi:export": "bun run src/scripts/export-openapi.ts"
     },
     "dependencies": {
         "@better-auth/drizzle-adapter": "^1.5.3",
         "@better-auth/i18n": "^1.5.4",
-        "@hono/zod-openapi": "^1.2.2",
+        "@hono/zod-openapi": "^1.2.4",
         "@hono/zod-validator": "^0.7.6",
         "@kirimkarya/db": "workspace:*",
         "@kirimkarya/mail": "workspace:*",
@@ -23,12 +24,13 @@
         "bullmq": "^5.41.0",
         "dotenv": "^17.3.1",
         "drizzle-orm": "^0.39.0",
-        "hono": "^4.6.14",
+        "hono": "^4.12.5",
         "postgres": "^3.4.4",
         "sharp": "^0.34.5",
         "zod": "^4.3.6"
     },
     "devDependencies": {
-        "@types/bun": "latest"
+        "@types/bun": "latest",
+        "tsx": "^4.21.0"
     }
 }

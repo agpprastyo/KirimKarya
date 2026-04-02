@@ -1,7 +1,7 @@
 import { z } from "@hono/zod-openapi";
 
 export const PublicGalleryResponseSchema = z.object({
-    id: z.uuid(),
+    id: z.string().uuid(),
     title: z.string(),
     clientEmail: z.string().nullable(),
     status: z.string(),
@@ -27,7 +27,7 @@ export const VerifyPasswordRequestSchema = z.object({
 });
 
 export const PublicPhotoResponseSchema = z.object({
-    id: z.uuid(),
+    id: z.string().uuid(),
     thumbnailUrl: z.string().nullable(),
     watermarkUrl: z.string().nullable(),
     isSelected: z.boolean(),

@@ -1,23 +1,13 @@
 <script lang="ts">
-    import { api as clientApi } from "$lib/api";
-    const api = clientApi as any;
-    import { onMount } from "svelte";
+    import { api, handleResponse } from "$lib/api";
+    import { createQuery } from "@tanstack/svelte-query";
     import { Motion } from "svelte-motion";
 
-    let data = $state<any>(null);
-    let loading = $state(true);
-
-    onMount(async () => {
-        try {
-            const res = await api.api.stats.summary.$get();
-            if (res.ok) {
-                const json = await res.json();
-                data = json.data;
-            }
-        } finally {
-            loading = false;
-        }
-    });
+    const statsQuery = createQuery(() => ({
+        queryKey: ["stats", "summary"],
+        queryFn: () => handleResponse(api.api.stats.summary.$get())
+            .then(res => res.data)
+    }));
 
     const formatActivity = (type: string) => {
         return type === 'COMMENT' ? 'added a comment' : 'selected a photo';
@@ -42,13 +32,18 @@
         </Motion>
     </div>
 
-    {#if loading}
+    {#if statsQuery.isLoading}
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
             {#each Array(4) as _}
                 <div class="h-32 bg-base-200 animate-pulse rounded-3xl"></div>
             {/each}
         </div>
-    {:else if data}
+    {:else if statsQuery.error}
+        <div class="alert alert-error">
+            <span>Error loading dashboard stats: {statsQuery.error.message}</span>
+        </div>
+    {:else if statsQuery.data}
+        {@const data = statsQuery.data}
         <!-- Stats Grid -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
             {#each [

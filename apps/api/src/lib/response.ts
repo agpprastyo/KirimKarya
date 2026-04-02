@@ -7,7 +7,7 @@ import { z } from "@hono/zod-openapi";
  */
 export const createApiResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) => {
     return z.object({
-        message: z.string().openapi({ example: "Success" }),
+        message: z.string(),
         data: dataSchema,
         meta: z.any().optional(),
     });
@@ -15,8 +15,8 @@ export const createApiResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =
 
 export const ApiErrorSchema = (message: string = "Internal Server Error", errorDetails: any = null) => {
     return z.object({
-        message: z.string().openapi({ example: message }),
-        error: z.any().optional().openapi({ example: errorDetails }),
+        message: z.string(),
+        error: z.any().optional(),
     });
 };
 
