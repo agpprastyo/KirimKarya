@@ -1,4 +1,4 @@
-.PHONY: install dev dev-stop api web worker db-generate db-migrate db-studio infra-up infra-down auth-generate
+.PHONY: install dev dev-stop api web worker db-generate db-migrate db-studio infra-up infra-down infra-reset auth-generate
 
 # Infrastructure management
 infra-up:
@@ -6,6 +6,10 @@ infra-up:
 
 infra-down:
 	docker compose down
+
+infra-reset:
+	docker compose down -v
+	@echo "Infrastructure reset. All data has been removed."
 
 
 # Install all dependencies globally across workspaces
@@ -30,6 +34,7 @@ dev-stop:
 	done
 	@pkill -9 -f "bun run" 2>/dev/null || true
 	@pkill -9 -f "vite" 2>/dev/null || true
+	docker compose down
 	@echo "Done."
 
 
@@ -44,9 +49,6 @@ web:
 # Run Background Worker (if implemented later)
 worker:
 	cd apps/worker && bun --env-file=../../.env run dev
-
-
-
 
 # Database Utility Commands (running from packages/db)
 db-generate:

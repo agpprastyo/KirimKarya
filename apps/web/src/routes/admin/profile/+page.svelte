@@ -304,7 +304,7 @@
                     <ImageUpload
                         label="Avatar Source"
                         bind:value={image}
-                        on:change={(e) => (image = e.detail)}
+                        onchange={(val: string) => (image = val)}
                     />
                 </div>
 

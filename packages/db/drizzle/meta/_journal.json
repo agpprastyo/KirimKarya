@@ -36,6 +36,20 @@
       "when": 1774707224969,
       "tag": "0004_brief_saracen",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1779513595897,
+      "tag": "0005_slimy_captain_flint",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779517647982,
+      "tag": "0006_parched_shiva",
+      "breakpoints": true
     }
   ]
 }

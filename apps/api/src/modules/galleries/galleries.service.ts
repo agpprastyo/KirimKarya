@@ -1,5 +1,7 @@
 import { db, galleries, galleryAccess, photos, feedbacks } from "@kirimkarya/db";
-import { eq, and, count } from "drizzle-orm";
+import { eq, and, count, inArray } from "drizzle-orm";
+import { s3, withS3Breaker } from "@kirimkarya/storage";
+import { redis } from "@kirimkarya/redis";
 
 export class GalleryService {
     async listByUserId(userId: string) {
@@ -66,12 +68,27 @@ export class GalleryService {
                 title: data.title,
                 clientEmail: data.clientEmail,
                 passwordHash,
-                isPrivate: data.isPrivate ?? false,
+                isPrivate: data.isPrivate ?? true,
                 expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
             })
             .returning();
 
         if (!newGallery) throw new Error("Failed to create gallery");
+
+        if (data.clientEmail) {
+            const emails = data.clientEmail
+                .split(/[,\s]+/)
+                .filter((e: string) => e.includes("@"));
+
+            if (emails.length > 0) {
+                await db.insert(galleryAccess).values(
+                    emails.map((email: string) => ({
+                        galleryId: newGallery.id,
+                        email,
+                    }))
+                );
+            }
+        }
 
         return {
             ...newGallery,
@@ -125,16 +142,49 @@ export class GalleryService {
                     }))
                 );
             }
+            await redis.del(`cache:gallery:${id}:metadata`);
         }
 
         return updatedGallery ? this.getById(id, userId) : null;
     }
 
     async delete(id: string, userId: string) {
+        // 1. Get all photos belonging to the gallery to drop S3 assets asynchronously later
+        const targetPhotos = await db
+            .select()
+            .from(photos)
+            .where(eq(photos.galleryId, id));
+
+        // 2. Cascade delete records in DB synchronously (in relational dependency order)
+        const photoIds = targetPhotos.map((p) => p.id);
+        if (photoIds.length > 0) {
+            await db.delete(feedbacks).where(inArray(feedbacks.photoId, photoIds));
+            await db.delete(photos).where(inArray(photos.id, photoIds));
+        }
+
+        await db.delete(galleryAccess).where(eq(galleryAccess.galleryId, id));
+
         const [deletedGallery] = await db
             .delete(galleries)
             .where(and(eq(galleries.id, id), eq(galleries.userId, userId)))
             .returning();
+
+        // 3. Fire S3 deletion in the background asynchronously (non-blocking)
+        if (targetPhotos.length > 0) {
+            Promise.all(
+                targetPhotos.flatMap((p) => {
+                    const keys = [];
+                    if (p.originalS3Key) keys.push(p.originalS3Key);
+                    if (p.thumbnailS3Key) keys.push(p.thumbnailS3Key);
+                    if (p.watermarkS3Key) keys.push(p.watermarkS3Key);
+                    return keys.map((key) => withS3Breaker(() => s3.file(key).delete()).catch(() => {}));
+                })
+            ).catch((err) => {
+                console.error("Failed to async delete gallery S3 files:", err);
+            });
+        }
+        await redis.del(`cache:gallery:${id}:metadata`);
+
         return deletedGallery;
     }
 

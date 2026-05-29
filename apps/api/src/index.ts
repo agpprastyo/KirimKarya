@@ -19,6 +19,9 @@ import galleriesRoutes from "./modules/galleries/galleries.controller";
 import photosRoutes from "./modules/photos/photos.controller";
 import publicRoutes from "./modules/public/public.controller";
 import statsRoutes from "./modules/stats/stats-controller";
+import watermarkRoutes from "./modules/watermark/watermark.controller";
+import adminRoutes from "./modules/admin/admin.controller";
+import { adminMiddleware } from "./core/middlewares/admin";
 
 import type { HonoEnv } from "./core/types/hono";
 
@@ -44,6 +47,10 @@ app.use("/photos", authMiddleware);
 app.use("/photos/*", authMiddleware);
 app.use("/stats", authMiddleware);
 app.use("/stats/*", authMiddleware);
+app.use("/watermark", authMiddleware);
+app.use("/watermark/*", authMiddleware);
+app.use("/admin", adminMiddleware);
+app.use("/admin/*", adminMiddleware);
 
 app.onError(errorHandler);
 
@@ -85,7 +92,9 @@ const routes = app
     .route("/galleries", galleriesRoutes)
     .route("/photos", photosRoutes)
     .route("/public", publicRoutes)
-    .route("/stats", statsRoutes);
+    .route("/stats", statsRoutes)
+    .route("/watermark", watermarkRoutes)
+    .route("/admin", adminRoutes);
 
 export type AppType = typeof routes;
 

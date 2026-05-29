@@ -171,6 +171,36 @@ const deliverGalleryRoute = createRoute({
     },
 });
 
+const deleteGalleryRoute = createRoute({
+    method: "delete",
+    path: "/{id}",
+    summary: "Delete Gallery",
+    tags: ["Galleries"],
+    request: {
+        params: z.object({
+            id: z.string().uuid(),
+        }),
+    },
+    responses: {
+        200: {
+            content: {
+                "application/json": {
+                    schema: createApiResponseSchema(z.object({ success: z.boolean() })),
+                },
+            },
+            description: "Gallery deleted",
+        },
+        404: {
+            content: {
+                "application/json": {
+                    schema: ApiErrorSchema("Gallery not found"),
+                },
+            },
+            description: "Not found",
+        },
+    },
+});
+
 const routes = galleriesRoutes
     .openapi(listGalleriesRoute, async (c) => {
         const user = c.get("user");
@@ -236,6 +266,16 @@ const routes = galleriesRoutes
             userId: user.id,
         });
 
+        return c.json(apiResponse.success({ success: true }), 200);
+    })
+    .openapi(deleteGalleryRoute, async (c) => {
+        const user = c.get("user");
+        const { id } = c.req.valid("param");
+
+        const gallery = await galleryService.getById(id, user.id);
+        if (!gallery) return c.json(apiResponse.error("Gallery not found"), 404);
+
+        await galleryService.delete(id, user.id);
         return c.json(apiResponse.success({ success: true }), 200);
     });
 

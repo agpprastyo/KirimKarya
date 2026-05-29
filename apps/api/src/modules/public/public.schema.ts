@@ -8,6 +8,8 @@ export const PublicGalleryResponseSchema = z.object({
     deliveryStatus: z.string().default("IDLE"),
     isPrivate: z.boolean(),
     accessMode: z.enum(["OTP", "PASSWORD"]),
+    selectionLimit: z.number().int().default(0),
+    pricePerExtraPhoto: z.number().int().default(0),
     createdAt: z.string(),
     deliveredAt: z.string().nullable().optional(),
 });

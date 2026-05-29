@@ -1,14 +1,17 @@
 import { Worker } from "bullmq";
 import { redis } from "@kirimkarya/redis";
 import { db, galleries, photos, feedbacks, galleryAccess, eq, and } from "@kirimkarya/db";
-import { s3 } from "@kirimkarya/storage";
+import { s3, env as storageEnv } from "@kirimkarya/storage";
 import {
     DELIVERY_QUEUE,
     type NotificationJobData,
 } from "@kirimkarya/queue";
 import { sendGalleryDeliveredEmail } from "@kirimkarya/mail";
 import { env } from "../env";
-import JSZip from "jszip";
+import archiver from "archiver";
+import { PassThrough, Readable } from "stream";
+import { S3Client as AwsS3Client } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 
 export const deliveryWorker = new Worker<NotificationJobData>(
     DELIVERY_QUEUE,
@@ -45,15 +48,42 @@ export const deliveryWorker = new Worker<NotificationJobData>(
 
             console.log(`[Delivery ${job.id}] Packaging ${selectedPhotos.length} photos...`);
 
-            const zip = new JSZip();
+            const archive = archiver("zip", { zlib: { level: 5 } });
+            const passThrough = new PassThrough();
+            archive.pipe(passThrough);
+
+            const zipKey = `${userId}/${galleryId}/delivery/photos.zip`;
+
+            const awsClient = new AwsS3Client({
+                region: storageEnv.STORAGE_REGION,
+                endpoint: storageEnv.STORAGE_ENDPOINT,
+                credentials: {
+                    accessKeyId: storageEnv.STORAGE_USER,
+                    secretAccessKey: storageEnv.STORAGE_PASSWORD,
+                },
+                forcePathStyle: true,
+            });
+
+            const upload = new Upload({
+                client: awsClient,
+                params: {
+                    Bucket: storageEnv.STORAGE_BUCKET,
+                    Key: zipKey,
+                    Body: passThrough,
+                    ContentType: "application/zip",
+                }
+            });
+
+            const uploadPromise = upload.done();
 
             for (const photo of selectedPhotos) {
                 try {
                     const fileRef = s3.file(photo.originalS3Key);
                     const exists = await fileRef.exists();
                     if (exists) {
-                        const content = await fileRef.bytes();
-                        zip.file(photo.filename, content);
+                        const webStream = fileRef.stream();
+                        const nodeStream = Readable.fromWeb(webStream as any);
+                        archive.append(nodeStream, { name: photo.filename });
                     } else {
                         console.warn(`[Delivery ${job.id}] Photo ${photo.id} not found at ${photo.originalS3Key}`);
                     }
@@ -62,12 +92,8 @@ export const deliveryWorker = new Worker<NotificationJobData>(
                 }
             }
 
-            const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
-            const zipKey = `${userId}/${galleryId}/delivery/photos.zip`;
-
-            await s3.file(zipKey).write(zipBuffer, {
-                type: "application/zip",
-            });
+            await archive.finalize();
+            await uploadPromise;
             await db.update(galleries)
                 .set({
                     deliveryStatus: "COMPLETED",

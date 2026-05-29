@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
 import { redis } from "@kirimkarya/redis";
-import { db, photos, eq, count, ne } from "@kirimkarya/db";
+import { db, photos, eq, count, ne, user } from "@kirimkarya/db";
 import { s3 } from "@kirimkarya/storage";
 import {
     PHOTO_PROCESSING_QUEUE,
@@ -27,7 +27,7 @@ export const photoProcessingWorker = new Worker<PhotoProcessingJobData>(
             const buffer = Buffer.from(bytes);
 
             const thumbnailBuffer = await sharp(buffer)
-                .resize(400, 400, { fit: "cover" })
+                .resize(400, 400, { fit: "inside", withoutEnlargement: true })
                 .toBuffer();
 
             const thumbnailKey = `${userId}/${galleryId}/thumbs/${photoId}.webp`;
@@ -42,18 +42,67 @@ export const photoProcessingWorker = new Worker<PhotoProcessingJobData>(
             const metadata = await sharp(resizedBuffer).metadata();
             const width = Math.floor(metadata.width || 1200);
             const height = Math.floor(metadata.height || 1200);
-            const fontSize = Math.max(24, Math.floor(width / 15));
 
             console.log(`[Job ${job.id}] Preview dimensions: ${width}x${height}`);
+
+            // Fetch user watermark settings
+            const [userData] = await db
+                .select({
+                    watermarkType: user.watermarkType,
+                    watermarkText: user.watermarkText,
+                    watermarkImageKey: user.watermarkImageKey,
+                    watermarkOpacity: user.watermarkOpacity,
+                })
+                .from(user)
+                .where(eq(user.id, userId))
+                .limit(1);
+
+            const opacity = (userData?.watermarkOpacity ?? 30) / 100;
+            let svgOverlay = "";
+
+            if (userData?.watermarkType === "IMAGE" && userData?.watermarkImageKey) {
+                try {
+                    const logoFile = s3.file(userData.watermarkImageKey);
+                    if (await logoFile.exists()) {
+                        const logoBytes = await logoFile.bytes();
+                        const base64Png = Buffer.from(logoBytes).toString("base64");
+
+                        // Beautiful repeating Shutterstock-style PNG logo grid pattern rotated -30deg
+                        svgOverlay = `<svg width="${width}" height="${height}">
+                            <defs>
+                                <pattern id="wm-logo-grid" width="220" height="220" patternUnits="userSpaceOnUse" patternTransform="rotate(-30)">
+                                    <image href="data:image/png;base64,${base64Png}" x="60" y="60" width="100" height="100" opacity="${opacity}" />
+                                </pattern>
+                            </defs>
+                            <rect width="100%" height="100%" fill="url(#wm-logo-grid)" />
+                        </svg>`;
+                        console.log(`[Job ${job.id}] Applied custom image logo watermark grid.`);
+                    }
+                } catch (logoErr: any) {
+                    console.error(`[Job ${job.id}] Failed to load custom logo. Falling back to text.`, logoErr.message);
+                }
+            }
+
+            if (!svgOverlay) {
+                const text = userData?.watermarkText || "Kirim Karya";
+                const fontSize = Math.max(16, Math.floor(width / 24));
+
+                // Beautiful repeating Shutterstock-style text grid pattern rotated -30deg
+                svgOverlay = `<svg width="${width}" height="${height}">
+                    <defs>
+                        <pattern id="wm-text-grid" width="240" height="240" patternUnits="userSpaceOnUse" patternTransform="rotate(-30)">
+                            <text x="120" y="120" font-family="sans-serif" font-size="${fontSize}" font-weight="bold" fill="white" fill-opacity="${opacity}" text-anchor="middle">${text}</text>
+                        </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#wm-text-grid)" />
+                </svg>`;
+                console.log(`[Job ${job.id}] Applied text watermark grid: "${text}"`);
+            }
 
             const watermarkBuffer = await sharp(resizedBuffer)
                 .composite([
                     {
-                        input: Buffer.from(
-                            `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-                                <text x="50%" y="50%" font-family="Arial" font-size="${fontSize}" font-weight="bold" fill="white" fill-opacity="0.3" text-anchor="middle">Kirim Karya</text>
-                            </svg>`
-                        ),
+                        input: Buffer.from(svgOverlay),
                         gravity: "center",
                     },
                 ])

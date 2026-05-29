@@ -39,7 +39,10 @@
             {/each}
         </div>
     {:else if statsQuery.error}
-        <div class="alert alert-error">
+        <div role="alert" class="alert alert-error alert-soft rounded-2xl flex items-center gap-3 font-semibold mb-6">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             <span>Error loading dashboard stats: {statsQuery.error.message}</span>
         </div>
     {:else if statsQuery.data}
@@ -130,7 +133,10 @@
                             animate={{ x: 0, opacity: 1 }}
                             transition={{ delay: 0.5 + (i * 0.1) }}
                         >
-                            <div class="card bg-base-200/30 p-4 border border-base-content/5 relative overflow-hidden group">
+                            <a
+                                href="/dashboard/galleries/{activity.galleryId}?photoId={activity.photoId}"
+                                class="card bg-base-200/30 p-4 border border-base-content/5 relative overflow-hidden group block hover:bg-base-200/60 transition-colors cursor-pointer"
+                            >
                                 <div class="absolute left-0 top-0 bottom-0 w-1 bg-primary/20 group-hover:bg-primary transition-colors"></div>
                                 <div class="text-xs font-black opacity-40 mb-1 flex justify-between">
                                     <span>{new Date(activity.createdAt).toLocaleDateString()}</span>
@@ -138,12 +144,12 @@
                                 </div>
                                 <p class="text-sm font-bold leading-tight">
                                     A client {formatActivity(activity.type)} in 
-                                    <span class="text-primary">"{activity.galleryTitle}"</span>
+                                    <span class="text-primary group-hover:underline">"{activity.galleryTitle}"</span>
                                 </p>
                                 <div class="mt-2 text-[10px] font-medium opacity-30 truncate">
                                     ID: {activity.clientIdentifier || 'Anonymous'}
                                 </div>
-                            </div>
+                            </a>
                         </Motion>
                     {/each}
                     {#if data.recentActivity.length === 0}

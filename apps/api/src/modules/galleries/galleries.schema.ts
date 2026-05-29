@@ -2,7 +2,7 @@ import { z } from "@hono/zod-openapi";
 
 export const CreateGallerySchema = z.object({
     title: z.string().min(1).max(255).openapi({ example: "Wedding of John & Doe" }),
-    clientEmail: z.string().email().optional().openapi({ example: "client@example.com" }),
+    clientEmail: z.string().min(1).openapi({ example: "client@example.com, partner@example.com" }),
     password: z.string().min(4).optional().openapi({ example: "123456" }),
     expiresAt: z.string().datetime().optional().openapi({ example: "2024-12-31T23:59:59Z" }),
 });
@@ -17,6 +17,8 @@ export const UpdateGallerySchema = z.object({
     expiresAt: z.coerce.string().nullable().optional(),
     status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
     notify: z.boolean().optional(),
+    selectionLimit: z.number().int().nonnegative().optional(),
+    pricePerExtraPhoto: z.number().int().nonnegative().optional(),
 });
 
 export const GalleryResponseSchema = z.object({
@@ -30,6 +32,8 @@ export const GalleryResponseSchema = z.object({
     deliveryZipKey: z.string().nullable().optional(),
     deliveryStatus: z.enum(["IDLE", "QUEUED", "PROCESSING", "COMPLETED", "FAILED"]).default("IDLE"),
     deliveredAt: z.coerce.string().nullable().optional(),
+    selectionLimit: z.number().int().default(0),
+    pricePerExtraPhoto: z.number().int().default(0),
     selectionCount: z.number().default(0),
     createdAt: z.coerce.string().openapi({ example: "2024-01-01T00:00:00Z" }),
     updatedAt: z.coerce.string().openapi({ example: "2024-01-01T00:00:00Z" }),

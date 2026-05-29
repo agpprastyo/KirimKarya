@@ -16,7 +16,8 @@ import {
     photosReadyTemplate, 
     selectionSubmittedTemplate,
     otpTemplate,
-    galleryDeliveredTemplate
+    galleryDeliveredTemplate,
+    reminderTemplate
 } from "./templates";
 
 export const sendEmail = async ({ to, subject, html }: { to: string, subject: string, html: string }) => {
@@ -65,5 +66,13 @@ export const sendGalleryDeliveredEmail = async (to: string, galleryTitle: string
         to,
         subject: `Your Photos from "${galleryTitle}" are Ready!`,
         html: galleryDeliveredTemplate(galleryTitle, downloadUrl),
+    });
+};
+
+export const sendReminderEmail = async (to: string, galleryTitle: string, customMessage: string, galleryUrl: string) => {
+    return sendEmail({
+        to,
+        subject: `Friendly Reminder: "${galleryTitle}"`,
+        html: reminderTemplate(galleryTitle, customMessage, galleryUrl),
     });
 };

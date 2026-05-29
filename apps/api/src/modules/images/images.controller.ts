@@ -3,6 +3,8 @@ import { getCookie } from "hono/cookie";
 import { auth } from "../auth/auth.config";
 import { imagesService } from "./images.service";
 import { ApiErrorSchema } from "../../lib/response";
+import { db, galleries } from "@kirimkarya/db";
+import { eq } from "drizzle-orm";
 
 const imagesRoutes = new OpenAPIHono();
 
@@ -56,16 +58,29 @@ const routes = imagesRoutes.openapi(getImageRoute, async (c) => {
 
         if (!authUser) {
             const parts = key.split("/");
-            if (parts.length >= 2) {
+            if (parts.length >= 3) {
                 const galleryId = parts[1];
-                const accessCookie = getCookie(c, `gallery_access_${galleryId}`);
+                const fileType = parts[2]; // "thumbs" | "watermarks" | "original"
 
-                if (accessCookie) {
-                    const { bytes, contentType } = await imagesService.getImage(key);
-                    return c.body(bytes as any, 200, {
-                        "Content-Type": contentType,
-                        "Cache-Control": "public, max-age=31536000, immutable",
-                    });
+                // Guests (public or private) should ONLY access thumbs, previews, and watermarks
+                if (fileType === "thumbs" || fileType === "previews" || fileType === "watermarks") {
+                    const [gallery] = await db
+                        .select({ isPrivate: galleries.isPrivate, status: galleries.status })
+                        .from(galleries)
+                        .where(eq(galleries.id, galleryId));
+
+                    if (gallery) {
+                        const isPublicAndPublished = !gallery.isPrivate && gallery.status === "PUBLISHED";
+                        const hasAccessCookie = !!getCookie(c, `gallery_access_${galleryId}`);
+
+                        if (isPublicAndPublished || hasAccessCookie) {
+                            const { bytes, contentType } = await imagesService.getImage(key);
+                            return c.body(bytes as any, 200, {
+                                "Content-Type": contentType,
+                                "Cache-Control": "public, max-age=31536000, immutable",
+                            });
+                        }
+                    }
                 }
             }
         }

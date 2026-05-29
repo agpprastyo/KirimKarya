@@ -9,5 +9,7 @@
   "account_settings_desc": "Kelola profil dan preferensi keamanan Anda di sini.",
   "admin_dashboard": "Dasbor Admin",
   "user_management": "Manajemen Pengguna",
+  "gallery_management": "Manajemen Galeri",
+  "job_monitor": "Monitor Tugas",
   "logout": "Keluar"
 }

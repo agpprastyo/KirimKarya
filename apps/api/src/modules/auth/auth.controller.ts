@@ -20,7 +20,7 @@ const uploadAvatarRoute = createRoute({
             content: {
                 "multipart/form-data": {
                     schema: z.object({
-                        file: z.string().openapi({ type: "string", format: "binary" })
+                        file: z.any().openapi({ type: "string", format: "binary" })
                     })
                 }
             }

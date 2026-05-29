@@ -1,6 +1,7 @@
 <script lang="ts">
     import { signUp, signIn } from "$lib/auth-client";
     import Alert from "$lib/components/Alert.svelte";
+    import {env} from "../../../env.ts";
 
     let name = $state("");
     let email = $state("");
@@ -41,7 +42,7 @@
         try {
             await signIn.social({
                 provider: "google",
-                callbackURL: "/dashboard",
+                callbackURL: `${env.PUBLIC_WEB_URL}/dashboard`,
             });
         } catch (err: any) {
             console.error("Login with Google failed:", err);

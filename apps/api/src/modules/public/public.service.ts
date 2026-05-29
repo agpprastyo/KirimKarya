@@ -4,22 +4,40 @@ import { sendOTPEmail } from "@kirimkarya/mail";
 
 export class PublicService {
     async getGalleryMetadata(id: string) {
-        const [gallery] = await db
-            .select({
-                id: galleries.id,
-                title: galleries.title,
-                clientEmail: galleries.clientEmail,
-                status: galleries.status,
-                deliveryStatus: galleries.deliveryStatus,
-                isPrivate: galleries.isPrivate,
-                userId: galleries.userId,
-                accessMode: galleries.accessMode,
-                createdAt: galleries.createdAt,
-                deliveredAt: galleries.deliveredAt,
-                deliveryZipKey: galleries.deliveryZipKey,
-            })
-            .from(galleries)
-            .where(eq(galleries.id, id));
+        const cacheKey = `cache:gallery:${id}:metadata`;
+        const cached = await redis.get(cacheKey);
+
+        let gallery;
+        if (cached) {
+            gallery = JSON.parse(cached);
+            gallery.createdAt = new Date(gallery.createdAt);
+            if (gallery.deliveredAt) gallery.deliveredAt = new Date(gallery.deliveredAt);
+        } else {
+            const [fetched] = await db
+                .select({
+                    id: galleries.id,
+                    title: galleries.title,
+                    clientEmail: galleries.clientEmail,
+                    status: galleries.status,
+                    deliveryStatus: galleries.deliveryStatus,
+                    isPrivate: galleries.isPrivate,
+                    userId: galleries.userId,
+                    accessMode: galleries.accessMode,
+                    selectionLimit: galleries.selectionLimit,
+                    pricePerExtraPhoto: galleries.pricePerExtraPhoto,
+                    createdAt: galleries.createdAt,
+                    deliveredAt: galleries.deliveredAt,
+                    deliveryZipKey: galleries.deliveryZipKey,
+                })
+                .from(galleries)
+                .where(eq(galleries.id, id));
+
+            gallery = fetched;
+            if (gallery) {
+                await redis.set(cacheKey, JSON.stringify(gallery));
+                await redis.expire(cacheKey, 3600); // 1 hour TTL
+            }
+        }
 
         if (gallery && gallery.status === "PUBLISHED") {
             db.execute(sql`UPDATE galleries SET views = views + 1 WHERE id = ${id}`).catch(err => {

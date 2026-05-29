@@ -17,6 +17,8 @@ export const galleries = pgTable("galleries", {
     deliveryZipKey: varchar("delivery_zip_key", { length: 1024 }),
     deliveryStatus: varchar("delivery_status", { length: 50 }).$type<"IDLE" | "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED">().default('IDLE').notNull(),
     deliveredAt: timestamp("delivered_at", { mode: "date" }),
+    selectionLimit: integer("selection_limit").default(0).notNull(),
+    pricePerExtraPhoto: integer("price_per_extra_photo").default(0).notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
 });

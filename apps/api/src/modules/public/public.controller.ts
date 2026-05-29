@@ -11,6 +11,7 @@ import {
 import { publicService } from "./public.service";
 import { notificationQueue } from "@kirimkarya/queue";
 import { s3 } from "@kirimkarya/storage";
+import { db, galleries, photos, feedbacks, eq, count, and } from "@kirimkarya/db";
 import type { HonoEnv } from "../../core/types/hono";
 import { env } from "../../env";
 import { setCookie, getCookie } from "hono/cookie";
@@ -128,6 +129,14 @@ const submitFeedbackRoute = createRoute({
             },
             description: "Bad request",
         },
+        403: {
+            content: {
+                "application/json": {
+                    schema: ApiErrorSchema("Gallery access required"),
+                },
+            },
+            description: "Forbidden",
+        },
         404: {
             content: {
                 "application/json": {
@@ -160,6 +169,14 @@ const finalizeGallerySelectionRoute = createRoute({
                 },
             },
             description: "Selection finalized",
+        },
+        403: {
+            content: {
+                "application/json": {
+                    schema: ApiErrorSchema("Gallery access required"),
+                },
+            },
+            description: "Forbidden",
         },
         404: {
             content: {
@@ -351,7 +368,8 @@ const routes = publicRoutes
     })
     .openapi(listPublicPhotosRoute, async (c) => {
         const { id: galleryId } = c.req.valid("param");
-        const clientId = c.req.header("x-client-id") || "anonymous";
+        const accessCookie = getCookie(c, `gallery_access_${galleryId}`);
+        const clientId = accessCookie || c.req.header("x-client-id") || "anonymous";
 
         const gallery = await publicService.getGalleryMetadata(galleryId);
         if (!gallery) return c.json(apiResponse.error("Gallery not found"), 404);
@@ -364,7 +382,6 @@ const routes = publicRoutes
         }
 
         if (gallery.isPrivate) {
-            const accessCookie = getCookie(c, `gallery_access_${galleryId}`);
             if (!accessCookie) {
                 return c.json(apiResponse.error("Gallery access required"), 403);
             }
@@ -390,10 +407,70 @@ const routes = publicRoutes
     })
     .openapi(submitFeedbackRoute, async (c) => {
         const { id: photoId } = c.req.valid("param");
-        const clientId = c.req.header("x-client-id");
         const { isSelected, comment } = c.req.valid("json");
 
+        const [photo] = await db
+            .select({ galleryId: photos.galleryId })
+            .from(photos)
+            .where(eq(photos.id, photoId))
+            .limit(1);
+
+        if (!photo) return c.json(apiResponse.error("Photo not found"), 404);
+        const galleryId = photo.galleryId;
+
+        const [gallery] = await db
+            .select({ selectionLimit: galleries.selectionLimit, isPrivate: galleries.isPrivate })
+            .from(galleries)
+            .where(eq(galleries.id, galleryId))
+            .limit(1);
+
+        if (!gallery) return c.json(apiResponse.error("Gallery not found"), 404);
+
+        const accessCookie = getCookie(c, `gallery_access_${galleryId}`);
+        if (gallery.isPrivate && !accessCookie) {
+            return c.json(apiResponse.error("Gallery access required"), 403);
+        }
+
+        const clientId = accessCookie || c.req.header("x-client-id");
         if (!clientId) return c.json(apiResponse.error("Client identifier required"), 400);
+
+        // Enforce selection limit validations
+        if (isSelected === true) {
+            if (gallery && gallery.selectionLimit > 0) {
+                // Check if this photo is already selected
+                const [existingSelection] = await db
+                    .select({ id: feedbacks.id })
+                    .from(feedbacks)
+                    .where(
+                        and(
+                            eq(feedbacks.photoId, photoId),
+                            eq(feedbacks.clientIdentifier, clientId),
+                            eq(feedbacks.isSelected, true)
+                        )
+                    )
+                    .limit(1);
+
+                if (!existingSelection) {
+                    // Count all selected photos for this client in the gallery
+                    const [selectedCountResult] = await db
+                        .select({ count: count() })
+                        .from(feedbacks)
+                        .innerJoin(photos, eq(feedbacks.photoId, photos.id))
+                        .where(
+                            and(
+                                eq(photos.galleryId, galleryId),
+                                eq(feedbacks.clientIdentifier, clientId),
+                                eq(feedbacks.isSelected, true)
+                            )
+                        );
+
+                    const currentCount = Number(selectedCountResult?.count || 0);
+                    if (currentCount >= gallery.selectionLimit) {
+                        return c.json(apiResponse.error("Selection quota exceeded"), 400);
+                    }
+                }
+            }
+        }
 
         const success = await publicService.toggleFeedback(photoId, clientId, isSelected, comment);
 
@@ -405,12 +482,16 @@ const routes = publicRoutes
     })
     .openapi(finalizeGallerySelectionRoute, async (c) => {
         const { id: galleryId } = c.req.valid("param");
-        const clientId = c.req.header("x-client-id");
-
-        if (!clientId) return c.json(apiResponse.error("Client identifier required"), 400);
-
         const gallery = await publicService.getGalleryMetadata(galleryId);
         if (!gallery) return c.json(apiResponse.error("Gallery not found"), 404);
+
+        const accessCookie = getCookie(c, `gallery_access_${galleryId}`);
+        if (gallery.isPrivate && !accessCookie) {
+            return c.json(apiResponse.error("Gallery access required"), 403);
+        }
+
+        const clientId = accessCookie || c.req.header("x-client-id");
+        if (!clientId) return c.json(apiResponse.error("Client identifier required"), 400);
 
         const feedbacks = await publicService.getClientFeedbacks(galleryId, clientId);
         const selectionCount = feedbacks.filter(f => f.isSelected).length;
@@ -419,7 +500,7 @@ const routes = publicRoutes
             type: "CLIENT_SELECTION_SUBMITTED",
             galleryId,
             userId: gallery.userId,
-            data: { selectionCount },
+            data: { selectionCount, clientEmail: clientId },
         });
 
         return c.json(apiResponse.success({ success: true }), 200);
@@ -446,7 +527,7 @@ const routes = publicRoutes
 
         setCookie(c, `gallery_access_${galleryId}`, email, {
             path: "/",
-            maxAge: 60 * 60 * 24,
+            maxAge: 60 * 60 * 24 * 7,
             httpOnly: true,
             sameSite: "Lax",
             secure: process.env.NODE_ENV === "production",
@@ -468,7 +549,7 @@ const routes = publicRoutes
 
         setCookie(c, `gallery_access_${galleryId}`, email, {
             path: "/",
-            maxAge: 60 * 60 * 24,
+            maxAge: 60 * 60 * 24 * 7,
             httpOnly: true,
             sameSite: "Lax",
             secure: process.env.NODE_ENV === "production",

@@ -9,5 +9,7 @@
   "account_settings_desc": "Manage your profile and security preferences here.",
   "admin_dashboard": "Admin Dashboard",
   "user_management": "User Management",
+  "gallery_management": "Gallery Management",
+  "job_monitor": "Job Monitor",
   "logout": "Logout"
 }

@@ -17,7 +17,8 @@ export type NotificationType =
     | "GALLERY_PUBLISHED"
     | "GALLERY_DELIVERY"
     | "PHOTOS_READY"
-    | "CLIENT_SELECTION_SUBMITTED";
+    | "CLIENT_SELECTION_SUBMITTED"
+    | "CLIENT_REMINDER";
 
 export interface NotificationJobData {
     type: NotificationType;

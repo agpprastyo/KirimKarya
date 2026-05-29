@@ -37,6 +37,7 @@
 
             imageToCrop = URL.createObjectURL(file);
             showCropper = true;
+            input.value = ""; // Reset input value to allow selecting the same file again if cancelled
         }
     }
 
@@ -156,6 +157,166 @@
             loading = false;
         }
     }
+
+    import { api as apiClient, handleResponse } from "$lib/api";
+
+    let watermarkType = $state<"TEXT" | "IMAGE">("TEXT");
+    let watermarkText = $state("Kirim Karya");
+    let watermarkOpacity = $state(30);
+    let watermarkImageUrl = $state<string | null>(null);
+    let previewLogoBase64 = $state<string | null>(null);
+    let logoUploading = $state(false);
+    let watermarkSaving = $state(false);
+
+    $effect(() => {
+        const fetchWatermark = async () => {
+            try {
+                const res = (await handleResponse(apiClient.api.watermark.$get())) as any;
+                if (res.data) {
+                    watermarkType = res.data.watermarkType as any;
+                    watermarkText = res.data.watermarkText;
+                    watermarkOpacity = res.data.watermarkOpacity;
+                    watermarkImageUrl = res.data.watermarkImageUrl;
+
+                    if (watermarkImageUrl) {
+                        try {
+                            const imgRes = await fetch(watermarkImageUrl, { credentials: "include" });
+                            if (imgRes.ok) {
+                                const blob = await imgRes.blob();
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                    previewLogoBase64 = reader.result as string;
+                                };
+                                reader.readAsDataURL(blob);
+                            }
+                        } catch (err: any) {
+                            console.error("Failed to load watermark logo base64 preview:", err);
+                        }
+                    }
+                }
+            } catch (err: any) {
+                console.error("Failed to fetch watermark settings:", err);
+            }
+        };
+        fetchWatermark();
+    });
+
+    async function handleWatermarkLogoChange(e: Event) {
+        const input = e.target as HTMLInputElement;
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            if (file.type !== "image/png") {
+                alertRef.show("Only transparent PNG images are supported for logos", "error");
+                return;
+            }
+            if (file.size > 2 * 1024 * 1024) {
+                alertRef.show("Logo file size must be under 2MB", "error");
+                return;
+            }
+
+            // Read locally for immediate, high-fidelity offline live preview!
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                previewLogoBase64 = evt.target?.result as string;
+            };
+            reader.readAsDataURL(file);
+
+            logoUploading = true;
+            try {
+                const formData = new FormData();
+                formData.append("file", file);
+
+                const url = apiClient.api.watermark.image.$url();
+                const res = await fetch(url.toString(), {
+                    method: "POST",
+                    body: formData,
+                    credentials: "include",
+                });
+
+                const result = await res.json();
+                if (!res.ok) {
+                    throw new Error(result.message || "Upload failed");
+                }
+
+                watermarkImageUrl = result.data.url;
+                alertRef.show("Watermark logo uploaded successfully!", "success");
+            } catch (err: any) {
+                alertRef.show(err.message, "error");
+            } finally {
+                logoUploading = false;
+            }
+        }
+    }
+
+    async function handleSaveWatermarkSettings() {
+        watermarkSaving = true;
+        try {
+            const res = await apiClient.api.watermark.$put({
+                json: {
+                    watermarkType,
+                    watermarkText,
+                    watermarkOpacity,
+                },
+            });
+
+            if (!res.ok) {
+                const result = await res.json() as any;
+                throw new Error(result.message || "Failed to update settings");
+            }
+
+            alertRef.show("Watermark settings updated successfully!", "success");
+        } catch (err: any) {
+            alertRef.show(err.message, "error");
+        } finally {
+            watermarkSaving = false;
+        }
+    }
+
+    let watermarkRegenerating = $state(false);
+
+    async function handleRegenerateWatermarks() {
+        watermarkRegenerating = true;
+        try {
+            const res = await fetch(`${env.PUBLIC_API_URL}/api/watermark/regenerate`, {
+                method: "POST",
+                credentials: "include",
+            });
+
+            const result = await res.json() as any;
+            if (!res.ok) {
+                throw new Error(result.message || "Failed to start regeneration");
+            }
+
+            alertRef.show(
+                `Successfully queued ${result.data.queuedCount} photo(s) for watermark regeneration in the background!`,
+                "success"
+            );
+        } catch (err: any) {
+            alertRef.show(err.message, "error");
+        } finally {
+            watermarkRegenerating = false;
+        }
+    }
+
+    const previewSvgUrl = $derived(
+        watermarkType === "IMAGE" && previewLogoBase64
+            ? `url("data:image/svg+xml,${encodeURIComponent(
+                [
+                    "<" + "svg xmlns=\"http://www.w3.org/2000/svg\" width=\"150\" height=\"150\">",
+                    "<" + "style>.wm { transform: rotate(-30deg); transform-origin: center; opacity: " + (watermarkOpacity / 100) + "; }</style>",
+                    "<" + "image href=\"" + previewLogoBase64 + "\" x=\"25\" y=\"25\" width=\"100\" height=\"100\" class=\"wm\" />",
+                    "</" + "svg>"
+                ].join("")
+              )}")`
+            : `url("data:image/svg+xml,${encodeURIComponent(
+                [
+                    "<" + "svg xmlns=\"http://www.w3.org/2000/svg\" width=\"180\" height=\"180\">",
+                    "<" + "style>.wm { font-family: sans-serif; font-weight: 900; font-size: 14px; fill: white; opacity: " + (watermarkOpacity / 100) + "; text-anchor: middle; transform: rotate(-30deg); transform-origin: center; }</style>",
+                    "<" + "text x=\"90\" y=\"90\" class=\"wm\">" + watermarkText + "</text>",
+                    "</" + "svg>"
+                ].join("")
+              )}")`
+    );
 </script>
 
 <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -181,7 +342,7 @@
                 <div class="flex flex-col items-center gap-4 mb-6">
                     <div class="relative group">
                         <div
-                            class="size-24 rounded-full ring-4 ring-primary/10 overflow-hidden bg-base-300"
+                            class="size-24 rounded-full ring-4 ring-primary/10 overflow-hidden bg-base-300 relative"
                         >
                             {#if avatarPreview}
                                 <img
@@ -203,32 +364,33 @@
                                         "U"}
                                 </div>
                             {/if}
-                        </div>
 
-                        <label
-                            class="absolute inset-0 flex items-center justify-center bg-black/40 text-white rounded-full opacity-0 group-hover:opacity-100 cursor-pointer transition-all border-none"
-                            for="avatar-input"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke-width="2"
-                                stroke="currentColor"
-                                class="size-6"
+                            <label
+                                class="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 cursor-pointer transition-all border-none"
+                                for="avatar-input"
+                                aria-label="Upload profile photo"
                             >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
-                                />
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"
-                                />
-                            </svg>
-                        </label>
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke-width="2"
+                                    stroke="currentColor"
+                                    class="size-6"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+                                    />
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"
+                                    />
+                                </svg>
+                            </label>
+                        </div>
                         <input
                             id="avatar-input"
                             type="file"
@@ -467,6 +629,168 @@
                             </button>
                         {/if}
                     {/if}
+                </div>
+            </div>
+        </div>
+
+        <!-- Watermark Settings -->
+        <div class="card bg-base-100 shadow-sm border border-base-content/5 overflow-hidden lg:col-span-2">
+            <div class="card-body bg-base-100">
+                <h2 class="card-title text-xl font-bold mb-2">Watermark Configuration</h2>
+                <p class="text-sm opacity-60 mb-6">Create and configure your custom Shutterstock-style diagonal repeating grid watermark.</p>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 bg-base-100">
+                    <!-- Left: Configuration Controls -->
+                    <div class="space-y-6">
+                        <!-- Watermark Type selector -->
+                        <div class="form-control">
+                            <div class="label p-1"><span class="label-text font-bold opacity-70">Watermark Mode</span></div>
+                            <div class="flex gap-4">
+                                <button
+                                    type="button"
+                                    class="flex-1 btn btn-outline rounded-2xl font-black {watermarkType === 'TEXT' ? 'btn-primary' : 'opacity-65'}"
+                                    onclick={() => watermarkType = "TEXT"}
+                                >
+                                    Text Watermark
+                                </button>
+                                <button
+                                    type="button"
+                                    class="flex-1 btn btn-outline rounded-2xl font-black {watermarkType === 'IMAGE' ? 'btn-primary' : 'opacity-65'}"
+                                    onclick={() => watermarkType = "IMAGE"}
+                                >
+                                    Logo Image Watermark
+                                </button>
+                            </div>
+                        </div>
+
+                        {#if watermarkType === 'TEXT'}
+                            <!-- Watermark Text Input -->
+                            <div class="form-control animate-in fade-in slide-in-from-top-2 duration-300">
+                                <label class="label p-1" for="wm-text"><span class="label-text font-bold opacity-70">Watermark Text</span></label>
+                                <input
+                                    id="wm-text"
+                                    type="text"
+                                    bind:value={watermarkText}
+                                    class="input input-bordered w-full bg-base-200/50 border-base-content/10 focus:border-primary transition-all font-bold"
+                                    placeholder="e.g. Kirim Karya"
+                                />
+                            </div>
+                        {:else}
+                            <!-- Watermark Logo Upload -->
+                            <div class="form-control animate-in fade-in slide-in-from-top-2 duration-300">
+                                <div class="label p-1"><span class="label-text font-bold opacity-70">Watermark PNG Logo (Transparent background)</span></div>
+                                <div class="flex items-center gap-6 p-4 bg-base-200/30 border border-dashed border-base-content/10 rounded-2xl">
+                                    <div class="size-20 bg-base-300/40 rounded-xl flex items-center justify-center overflow-hidden border border-base-content/5 relative group">
+                                        {#if watermarkImageUrl}
+                                            <img src={watermarkImageUrl} alt="Logo Watermark" class="size-full object-contain p-2" />
+                                        {:else}
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8 opacity-25">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                                            </svg>
+                                        {/if}
+                                    </div>
+                                    <div class="flex-1 space-y-2">
+                                        <input
+                                            id="wm-image-input"
+                                            type="file"
+                                            accept="image/png"
+                                            class="hidden"
+                                            onchange={handleWatermarkLogoChange}
+                                        />
+                                        <label
+                                            for="wm-image-input"
+                                            class="btn btn-sm btn-outline rounded-xl font-bold cursor-pointer"
+                                        >
+                                            {#if logoUploading}
+                                                <span class="loading loading-spinner loading-xs"></span>
+                                                Uploading...
+                                            {:else}
+                                                Upload PNG Logo
+                                            {/if}
+                                        </label>
+                                        <p class="text-[10px] opacity-40 font-bold uppercase">Supports transparent PNG only, max 2MB.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        {/if}
+
+                        <!-- Opacity Slider -->
+                        <div class="form-control">
+                            <div class="flex justify-between items-center p-1">
+                                <span class="label-text font-bold opacity-70">Watermark Opacity</span>
+                                <span class="badge badge-primary font-black">{watermarkOpacity}%</span>
+                            </div>
+                            <div class="flex items-center gap-4 bg-base-200/40 p-4 rounded-2xl border border-base-content/5 mt-2">
+                                <input
+                                    type="range"
+                                    min="10"
+                                    max="100"
+                                    step="5"
+                                    bind:value={watermarkOpacity}
+                                    class="range range-primary range-sm flex-1"
+                                />
+                            </div>
+                        </div>
+
+                        <!-- Action buttons -->
+                        <div class="flex flex-col sm:flex-row gap-4 pt-2">
+                            <button
+                                type="button"
+                                class="flex-1 btn btn-primary rounded-2xl font-black h-14 shadow-xl shadow-primary/20 cursor-pointer text-sm"
+                                onclick={handleSaveWatermarkSettings}
+                                disabled={watermarkSaving || logoUploading || watermarkRegenerating}
+                            >
+                                {#if watermarkSaving}
+                                    <span class="loading loading-spinner loading-xs"></span>
+                                    Updating...
+                                {:else}
+                                    Save Watermark Settings
+                                {/if}
+                            </button>
+                            <button
+                                type="button"
+                                class="flex-1 btn btn-outline btn-secondary rounded-2xl font-black h-14 cursor-pointer text-sm"
+                                onclick={handleRegenerateWatermarks}
+                                disabled={watermarkSaving || logoUploading || watermarkRegenerating}
+                            >
+                                {#if watermarkRegenerating}
+                                    <span class="loading loading-spinner loading-xs"></span>
+                                    Processing...
+                                {:else}
+                                    Apply to Existing Photos
+                                {/if}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right: Live Preview Panel -->
+                    <div class="flex flex-col justify-between">
+                                <div class="label p-1"><span class="label-text font-bold opacity-70">Interactive Real-Time Preview</span></div>
+                        
+                        <div class="relative w-full aspect-video rounded-3xl overflow-hidden border border-base-content/10 shadow-lg bg-base-300">
+                            <!-- Premium generated photography background -->
+                            <img
+                                src="/images/watermark_preview_bg.png"
+                                alt="Photography Preview Background"
+                                class="size-full object-cover"
+                            />
+
+                            <!-- Real-time SVG Tiled Repeating Grid Watermark Overlay -->
+                            <div
+                                style="background-image: {previewSvgUrl};"
+                                class="absolute inset-0 pointer-events-none transition-all duration-200"
+                            ></div>
+
+                            <!-- Live Tag -->
+                            <div class="absolute top-4 left-4 badge badge-primary font-black uppercase text-[9px] tracking-wider py-2.5 px-3 backdrop-blur-md bg-primary/90 shadow-md">
+                                Live Preview
+                            </div>
+                        </div>
+
+                        <p class="text-xs opacity-50 mt-4 font-semibold text-center italic">
+                            * This preview reflects how your custom Shutterstock-style watermark pattern tiles over uploaded photos in real-time.
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>

@@ -5,7 +5,7 @@ import {
     NOTIFICATION_QUEUE,
     type NotificationJobData,
 } from "@kirimkarya/queue";
-import { sendGalleryPublishedEmail, sendPhotosReadyEmail, sendSelectionSubmittedEmail } from "@kirimkarya/mail";
+import { sendGalleryPublishedEmail, sendPhotosReadyEmail, sendSelectionSubmittedEmail, sendReminderEmail } from "@kirimkarya/mail";
 import { env } from "../env";
 
 export const notificationWorker = new Worker<NotificationJobData>(
@@ -42,6 +42,10 @@ export const notificationWorker = new Worker<NotificationJobData>(
             case "CLIENT_SELECTION_SUBMITTED":
                 const selDashboardUrl = `${env.WEB_URL}/dashboard/galleries/${galleryId}/proofing`;
                 await sendSelectionSubmittedEmail(userRecord.email, gallery.title, data.selectionCount, selDashboardUrl);
+                break;
+            case "CLIENT_REMINDER":
+                const reminderGalleryUrl = `${env.WEB_URL}/g/${galleryId}`;
+                await sendReminderEmail(data.clientEmail, gallery.title, data.message, reminderGalleryUrl);
                 break;
         }
     },

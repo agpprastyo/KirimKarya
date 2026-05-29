@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index, integer } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -18,6 +18,10 @@ export const user = pgTable("user", {
   banReason: text("ban_reason"),
   banExpires: timestamp("ban_expires"),
   subscriptionTier: text("subscription_tier").default("FREE"),
+  watermarkType: text("watermark_type").default("TEXT").notNull(),
+  watermarkText: text("watermark_text").default("Kirim Karya").notNull(),
+  watermarkImageKey: text("watermark_image_key"),
+  watermarkOpacity: integer("watermark_opacity").default(30).notNull(),
 });
 
 export const session = pgTable(

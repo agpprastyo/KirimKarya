@@ -2,6 +2,12 @@
     import ThemeToggle from "./ThemeToggle.svelte";
     import { useSession } from "$lib/auth-client";
 
+    interface Props {
+        isDashboard?: boolean;
+    }
+
+    let { isDashboard = false }: Props = $props();
+
     const session = useSession();
 </script>
 
@@ -18,28 +24,30 @@
             </span>
         </a>
     </div>
-    <div class="flex-none hidden lg:flex items-center gap-8 mr-8">
-        <a
-            href="#features"
-            class="text-sm font-medium hover:text-primary transition-colors"
-            >Features</a
-        >
-        <a
-            href="#solutions"
-            class="text-sm font-medium hover:text-primary transition-colors"
-            >Solutions</a
-        >
-        <a
-            href="#blog"
-            class="text-sm font-medium hover:text-primary transition-colors"
-            >Blog</a
-        >
-        <a
-            href="#pricing"
-            class="text-sm font-medium hover:text-primary transition-colors"
-            >Pricing</a
-        >
-    </div>
+    {#if !isDashboard}
+        <div class="flex-none hidden lg:flex items-center gap-8 mr-8">
+            <a
+                href="#features"
+                class="text-sm font-medium hover:text-primary transition-colors"
+                >Features</a
+            >
+            <a
+                href="#solutions"
+                class="text-sm font-medium hover:text-primary transition-colors"
+                >Solutions</a
+            >
+            <a
+                href="#blog"
+                class="text-sm font-medium hover:text-primary transition-colors"
+                >Blog</a
+            >
+            <a
+                href="#pricing"
+                class="text-sm font-medium hover:text-primary transition-colors"
+                >Pricing</a
+            >
+        </div>
+    {/if}
     <div class="flex-none gap-2">
         <ThemeToggle />
         {#if $session.data}
@@ -51,14 +59,16 @@
                     Admin Panel
                 </a>
             {/if}
-            <a
-                href={$session.data.user.role === "admin"
-                    ? "/admin"
-                    : "/dashboard"}
-                class="btn btn-ghost rounded-xl font-bold px-6"
-            >
-                Dashboard
-            </a>
+            {#if !isDashboard}
+                <a
+                    href={$session.data.user.role === "admin"
+                        ? "/admin"
+                        : "/dashboard"}
+                    class="btn btn-ghost rounded-xl font-bold px-6"
+                >
+                    Dashboard
+                </a>
+            {/if}
             {#if $session.data?.user?.image}
                 <div class="avatar online ml-2">
                     <div

@@ -3,3 +3,4 @@ export * from "./photos-ready";
 export * from "./selection-submitted";
 export * from "./otp";
 export * from "./gallery-delivered";
+export * from "./reminder";
