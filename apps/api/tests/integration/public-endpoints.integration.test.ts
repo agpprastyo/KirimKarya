@@ -167,4 +167,22 @@ describe("Public Endpoints API Integration Tests", () => {
             mockIsPrivate = false;
         }
     });
+
+    test("GET /api/images/:userId/:galleryId/thumbs/:filename should fail with 401 when private and dummy token cookie is provided", async () => {
+        mockIsPrivate = true;
+        try {
+            const response = await app.request(
+                `/api/images/user-abc/${mockGalleryId}/thumbs/test.jpg`,
+                {
+                    method: "GET",
+                    headers: {
+                        "Cookie": `gallery_access_${mockGalleryId}=fake_token`,
+                    }
+                }
+            );
+            expect(response.status).toBe(401);
+        } finally {
+            mockIsPrivate = false;
+        }
+    });
 });

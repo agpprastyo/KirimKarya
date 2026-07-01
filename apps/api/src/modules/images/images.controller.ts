@@ -5,6 +5,7 @@ import { imagesService } from "./images.service";
 import { ApiErrorSchema } from "../../lib/response";
 import { db, galleries } from "@kirimkarya/db";
 import { eq } from "drizzle-orm";
+import { publicService } from "../public/public.service";
 
 const imagesRoutes = new OpenAPIHono();
 
@@ -42,9 +43,18 @@ const routes = imagesRoutes.openapi(getImageRoute, async (c) => {
     const user = (c as any).get("user");
 
     const fullPath = new URL(c.req.url).pathname;
-    const key = fullPath.replace("/api/images/", "");
+    const rawKey = fullPath.replace("/api/images/", "");
 
-    const isPublicPath = key.includes("uploads/") || key.includes("avatar/");
+    // SEC-2: Sanitize key to prevent path traversal
+    // Normalize the path and reject any key that tries to escape with ../
+    const key = rawKey.replace(/\\/g, "/").replace(/\.\.+\//g, "").replace(/^\/+/, "");
+
+    if (!key || key.includes("..")) {
+        return c.json({ error: "Forbidden" }, 403);
+    }
+
+    // SEC-2: Use startsWith() — not includes() — to prevent bypass via crafted paths
+    const isPublicPath = key.startsWith("uploads/") || key.startsWith("avatar/");
 
     if (!isPublicPath) {
         let authUser = user;
@@ -59,8 +69,8 @@ const routes = imagesRoutes.openapi(getImageRoute, async (c) => {
         if (!authUser) {
             const parts = key.split("/");
             if (parts.length >= 3) {
-                const galleryId = parts[1];
-                const fileType = parts[2]; // "thumbs" | "watermarks" | "original"
+                const galleryId = parts[1]!;
+                const fileType = parts[2]!; // "thumbs" | "watermarks" | "original"
 
                 // Guests (public or private) should ONLY access thumbs, previews, and watermarks
                 if (fileType === "thumbs" || fileType === "previews" || fileType === "watermarks") {
@@ -71,11 +81,14 @@ const routes = imagesRoutes.openapi(getImageRoute, async (c) => {
 
                     if (gallery) {
                         const isPublicAndPublished = !gallery.isPrivate && gallery.status === "PUBLISHED";
-                        const hasAccessCookie = !!getCookie(c, `gallery_access_${galleryId}`);
+                        const accessCookie = getCookie(c, `gallery_access_${galleryId}`);
+                        // Resolve the token to an email via Redis
+                        const resolvedEmail = accessCookie ? await publicService.resolveClientEmail(galleryId, accessCookie) : null;
+                        const hasAccessCookie = !!resolvedEmail;
 
                         if (isPublicAndPublished || hasAccessCookie) {
-                            const { bytes, contentType } = await imagesService.getImage(key);
-                            return c.body(bytes as any, 200, {
+                            const { stream, contentType } = await imagesService.getImageStream(key);
+                            return c.body(stream as any, 200, {
                                 "Content-Type": contentType,
                                 "Cache-Control": "public, max-age=31536000, immutable",
                             });
@@ -95,9 +108,9 @@ const routes = imagesRoutes.openapi(getImageRoute, async (c) => {
         }
     }
 
-    const { bytes, contentType } = await imagesService.getImage(key);
+    const { stream, contentType } = await imagesService.getImageStream(key);
 
-    return c.body(bytes as any, 200, {
+    return c.body(stream as any, 200, {
         "Content-Type": contentType,
         "Cache-Control": "public, max-age=31536000, immutable",
     });
