@@ -130,3 +130,40 @@ describe("PublicService Token Resolution", () => {
         await redis.del(`access_token:${galleryId}:${token}`);
     });
 });
+
+describe("PublicService verifyOTP", () => {
+    test("verifyOTP should successfully verify correct OTP, clear locks, and store access token", async () => {
+        redisStore = {};
+        const galleryId = "gallery-123";
+        const email = "client@example.com";
+        const code = "123456";
+
+        // Pre-store OTP in Redis
+        redisStore[`otp:${galleryId}:${email}`] = code;
+
+        const result = await publicService.verifyOTP(galleryId, email, code);
+        expect(result.success).toBeTrue();
+        expect(result.accessToken).toBeString();
+
+        // Verify OTP key was deleted
+        expect(redisStore[`otp:${galleryId}:${email}`]).toBeUndefined();
+
+        // Verify access token was saved in Redis
+        const storedEmail = redisStore[`access_token:${galleryId}:${result.accessToken}`];
+        expect(storedEmail).toBe(email);
+    });
+
+    test("verifyOTP should fail on incorrect OTP", async () => {
+        redisStore = {};
+        const galleryId = "gallery-123";
+        const email = "client@example.com";
+        const code = "123456";
+
+        redisStore[`otp:${galleryId}:${email}`] = "654321";
+
+        const result = await publicService.verifyOTP(galleryId, email, code);
+        expect(result.success).toBeFalse();
+        expect(result.error).toBe("Invalid or expired verification code");
+        expect(result.accessToken).toBeUndefined();
+    });
+});

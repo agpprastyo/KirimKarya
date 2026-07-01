@@ -209,9 +209,7 @@ export class PublicService {
         await redis.del(`ratelimit:request-otp:${galleryId}:${email}`);
 
         // SEC-5: Return an opaque token to store in cookie instead of raw email
-        const accessToken = generateAccessToken(galleryId, email);
-        // Store the mapping so we can resolve the token later if needed
-        await redis.set(`access_token:${galleryId}:${accessToken}`, email, "EX", 60 * 60 * 24 * 7);
+        const accessToken = await this.saveAccessToken(galleryId, email);
 
         return { success: true, accessToken };
     }
@@ -257,10 +255,15 @@ export class PublicService {
         await redis.del(`ratelimit:password:${galleryId}:${email}`);
 
         // SEC-5: Return an opaque token to store in cookie instead of raw email
-        const accessToken = generateAccessToken(galleryId, email);
-        await redis.set(`access_token:${galleryId}:${accessToken}`, email, "EX", 60 * 60 * 24 * 7);
+        const accessToken = await this.saveAccessToken(galleryId, email);
 
         return { success: true, accessToken };
+    }
+
+    private async saveAccessToken(galleryId: string, email: string): Promise<string> {
+        const accessToken = generateAccessToken(galleryId, email);
+        await redis.set(`access_token:${galleryId}:${accessToken}`, email, "EX", 60 * 60 * 24 * 7);
+        return accessToken;
     }
 
     async resolveClientEmail(galleryId: string, token: string | undefined): Promise<string | null> {
