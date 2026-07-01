@@ -14,7 +14,8 @@
         "@kirimkarya/storage": "workspace:*",
         "archiver": "^8.0.0",
         "bullmq": "^5.41.0",
-        "dotenv": "^17.3.1",
+        "@kirimkarya/env": "workspace:*",
+        "drizzle-orm": "^0.39.0",
         "jszip": "^3.10.1",
         "sharp": "^0.34.5",
         "zod": "^4.3.6"

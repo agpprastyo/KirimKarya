@@ -4,7 +4,7 @@
     "type": "module",
     "main": "src/index.ts",
     "dependencies": {
-        "dotenv": "^17.3.1",
+        "@kirimkarya/env": "workspace:*",
         "nodemailer": "^6.9.13",
         "zod": "^4.3.6"
     },

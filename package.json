@@ -3,6 +3,9 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "rotate-secrets": "bun run scripts/rotate-secrets.ts"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
