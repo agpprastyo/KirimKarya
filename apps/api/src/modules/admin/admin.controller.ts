@@ -409,7 +409,7 @@ const retryAllAdminJobsRoute = createRoute({
     summary: "Retry All Failed Jobs in Queue",
     tags: ["Admin"],
     method: "post",
-    path: "/jobs/:queue/retry-all",
+    path: "/jobs/{queue}/retry-all",
     request: {
         params: z.object({
             queue: z.string(),
@@ -520,7 +520,7 @@ const purgeAllFailedAdminJobsRoute = createRoute({
     summary: "Purge All Failed Jobs in Queue",
     tags: ["Admin"],
     method: "delete",
-    path: "/jobs/:queue/purge-failed",
+    path: "/jobs/{queue}/purge-failed",
     request: {
         params: z.object({
             queue: z.string(),

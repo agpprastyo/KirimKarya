@@ -39,8 +39,10 @@ mock.module("@kirimkarya/mail", () => ({}));
 mock.module("../../src/modules/auth/auth.config", () => ({
     auth: {
         api: {
-            getSession: async ({ headers }: any) => {
-                const authHeader = headers?.Authorization || headers?.get?.("Authorization");
+            getSession: async ({ headers }: { headers: unknown }) => {
+                const authHeader = headers instanceof Headers
+                    ? headers.get("Authorization")
+                    : (headers as Record<string, string | undefined> | undefined)?.Authorization;
                 if (authHeader === "Bearer admin-token") {
                     return { user: { id: "admin-user", email: "admin@example.com", role: "admin" } };
                 }
