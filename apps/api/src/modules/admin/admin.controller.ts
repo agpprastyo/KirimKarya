@@ -5,6 +5,7 @@ import { eq, sql, count, desc, and, or, like } from "drizzle-orm";
 import { s3 } from "@kirimkarya/storage";
 import type { HonoEnv } from "../../core/types/hono";
 import { photoQueue, notificationQueue, cleanupQueue, deliveryQueue } from "@kirimkarya/queue";
+import { Queue, Job } from "bullmq";
 
 const adminRoutes = new OpenAPIHono<HonoEnv>();
 
@@ -23,7 +24,7 @@ const getQueueByName = (name: string) => {
     }
 };
 
-const getQueueStats = async (queue: any, name: string) => {
+const getQueueStats = async (queue: Queue, name: string) => {
     const [active, waiting, delayed, failed, completed] = await Promise.all([
         queue.getActiveCount(),
         queue.getWaitingCount(),
@@ -41,9 +42,9 @@ const getQueueStats = async (queue: any, name: string) => {
     };
 };
 
-const getFailedJobs = async (queue: any, name: string) => {
+const getFailedJobs = async (queue: Queue, name: string) => {
     const jobs = await queue.getFailed(0, 50);
-    return jobs.map((job: any) => ({
+    return jobs.map((job: Job) => ({
         id: job.id || "",
         name: job.name,
         queueName: name,
@@ -183,7 +184,7 @@ const updateAdminGalleryStatusRoute = createRoute({
     summary: "Override Gallery Status",
     tags: ["Admin"],
     method: "put",
-    path: "/galleries/:id/status",
+    path: "/galleries/{id}/status",
     request: {
         params: z.object({
             id: z.string(),
@@ -239,7 +240,7 @@ const deleteAdminGalleryRoute = createRoute({
     summary: "Delete Gallery (Cascade Purge)",
     tags: ["Admin"],
     method: "delete",
-    path: "/galleries/:id",
+    path: "/galleries/{id}",
     request: {
         params: z.object({
             id: z.string(),
@@ -352,7 +353,7 @@ const retryAdminJobRoute = createRoute({
     summary: "Retry Failed Job",
     tags: ["Admin"],
     method: "post",
-    path: "/jobs/:queue/:id/retry",
+    path: "/jobs/{queue}/{id}/retry",
     request: {
         params: z.object({
             queue: z.string(),
@@ -463,7 +464,7 @@ const deleteAdminJobRoute = createRoute({
     summary: "Remove Failed Job",
     tags: ["Admin"],
     method: "delete",
-    path: "/jobs/:queue/:id",
+    path: "/jobs/{queue}/{id}",
     request: {
         params: z.object({
             queue: z.string(),
@@ -571,12 +572,6 @@ const purgeAllFailedAdminJobsRoute = createRoute({
 
 const routes = adminRoutes
     .openapi(getAdminStatsRoute, async (c) => {
-        // Enforce role constraints inside handler
-        const userDetails = c.get("user");
-        if (!userDetails || userDetails.role !== "admin") {
-            return c.json(apiResponse.error("Forbidden: Admin access required"), 403);
-        }
-
         try {
             // Aggregated counts from PostgreSQL
             const [usersCountResult] = await db.select({ count: count() }).from(user);
@@ -621,11 +616,6 @@ const routes = adminRoutes
         }
     })
     .openapi(getAdminGalleriesRoute, async (c) => {
-        const userDetails = c.get("user");
-        if (!userDetails || userDetails.role !== "admin") {
-            return c.json(apiResponse.error("Forbidden: Admin access required"), 403);
-        }
-
         const { limit: queryLimit, offset: queryOffset, search } = c.req.valid("query");
         const limitVal = parseInt(queryLimit) || 10;
         const offsetVal = parseInt(queryOffset) || 0;
@@ -643,18 +633,27 @@ const routes = adminRoutes
                 );
             }
 
-            // Query global galleries list joining user
+            // Query global galleries list joining user and photos to get counts in a single query
             const listQuery = db
                 .select({
-                    gallery: galleries,
+                    id: galleries.id,
+                    title: galleries.title,
+                    clientEmail: galleries.clientEmail,
+                    status: galleries.status,
+                    accessMode: galleries.accessMode,
+                    views: galleries.views,
+                    createdAt: galleries.createdAt,
                     owner: {
                         id: user.id,
                         name: user.name,
                         email: user.email,
                     },
+                    photoCount: count(photos.id),
                 })
                 .from(galleries)
-                .innerJoin(user, eq(galleries.userId, user.id));
+                .innerJoin(user, eq(galleries.userId, user.id))
+                .leftJoin(photos, eq(photos.galleryId, galleries.id))
+                .groupBy(galleries.id, user.id);
 
             if (whereClause) {
                 listQuery.where(whereClause);
@@ -665,27 +664,17 @@ const routes = adminRoutes
                 .limit(limitVal)
                 .offset(offsetVal);
 
-            // Fetch photo count for each gallery
-            const galleriesWithPhotoCount = await Promise.all(
-                rawGalleries.map(async (row) => {
-                    const [photoCountResult] = await db
-                        .select({ count: count() })
-                        .from(photos)
-                        .where(eq(photos.galleryId, row.gallery.id));
-
-                    return {
-                        id: row.gallery.id,
-                        title: row.gallery.title,
-                        clientEmail: row.gallery.clientEmail,
-                        status: row.gallery.status,
-                        accessMode: row.gallery.accessMode,
-                        views: row.gallery.views,
-                        createdAt: row.gallery.createdAt.toISOString(),
-                        user: row.owner,
-                        photoCount: photoCountResult?.count || 0,
-                    };
-                })
-            );
+            const galleriesWithPhotoCount = rawGalleries.map((row) => ({
+                id: row.id,
+                title: row.title,
+                clientEmail: row.clientEmail,
+                status: row.status,
+                accessMode: row.accessMode,
+                views: row.views,
+                createdAt: row.createdAt.toISOString(),
+                user: row.owner,
+                photoCount: Number(row.photoCount),
+            }));
 
             // Total count for pagination
             const countQuery = db
@@ -711,11 +700,6 @@ const routes = adminRoutes
         }
     })
     .openapi(updateAdminGalleryStatusRoute, async (c) => {
-        const userDetails = c.get("user");
-        if (!userDetails || userDetails.role !== "admin") {
-            return c.json(apiResponse.error("Forbidden: Admin access required"), 403);
-        }
-
         const { id } = c.req.valid("param");
         const { status } = c.req.valid("json");
 
@@ -735,11 +719,6 @@ const routes = adminRoutes
         }
     })
     .openapi(deleteAdminGalleryRoute, async (c) => {
-        const userDetails = c.get("user");
-        if (!userDetails || userDetails.role !== "admin") {
-            return c.json(apiResponse.error("Forbidden: Admin access required"), 403);
-        }
-
         const { id: galleryId } = c.req.valid("param");
 
         try {
@@ -775,11 +754,6 @@ const routes = adminRoutes
         }
     })
     .openapi(getAdminJobsStatusRoute, async (c) => {
-        const userDetails = c.get("user");
-        if (!userDetails || userDetails.role !== "admin") {
-            return c.json(apiResponse.error("Forbidden: Admin access required"), 403);
-        }
-
         try {
             const queuesList = [
                 { queue: photoQueue, name: "photo-processing" },
@@ -814,11 +788,6 @@ const routes = adminRoutes
         }
     })
     .openapi(retryAdminJobRoute, async (c) => {
-        const userDetails = c.get("user");
-        if (!userDetails || userDetails.role !== "admin") {
-            return c.json(apiResponse.error("Forbidden: Admin access required"), 403);
-        }
-
         const { queue: queueName, id } = c.req.valid("param");
         const queue = getQueueByName(queueName);
         if (!queue) {
@@ -839,11 +808,6 @@ const routes = adminRoutes
         }
     })
     .openapi(retryAllAdminJobsRoute, async (c) => {
-        const userDetails = c.get("user");
-        if (!userDetails || userDetails.role !== "admin") {
-            return c.json(apiResponse.error("Forbidden: Admin access required"), 403);
-        }
-
         const { queue: queueName } = c.req.valid("param");
         const queue = getQueueByName(queueName);
         if (!queue) {
@@ -860,11 +824,6 @@ const routes = adminRoutes
         }
     })
     .openapi(deleteAdminJobRoute, async (c) => {
-        const userDetails = c.get("user");
-        if (!userDetails || userDetails.role !== "admin") {
-            return c.json(apiResponse.error("Forbidden: Admin access required"), 403);
-        }
-
         const { queue: queueName, id } = c.req.valid("param");
         const queue = getQueueByName(queueName);
         if (!queue) {
@@ -885,11 +844,6 @@ const routes = adminRoutes
         }
     })
     .openapi(purgeAllFailedAdminJobsRoute, async (c) => {
-        const userDetails = c.get("user");
-        if (!userDetails || userDetails.role !== "admin") {
-            return c.json(apiResponse.error("Forbidden: Admin access required"), 403);
-        }
-
         const { queue: queueName } = c.req.valid("param");
         const queue = getQueueByName(queueName);
         if (!queue) {
