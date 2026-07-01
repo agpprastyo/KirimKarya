@@ -77,7 +77,11 @@ export class PublicService {
         const cacheKey = `cache:gallery:${galleryId}:photos`;
         const cached = await redis.get(cacheKey);
         if (cached) {
-            return JSON.parse(cached) as any;
+            return JSON.parse(cached) as {
+                id: string;
+                thumbnailS3Key: string | null;
+                watermarkS3Key: string | null;
+            }[];
         }
 
         const list = await db
