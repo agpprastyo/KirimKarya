@@ -3,16 +3,18 @@ import { db, user } from "@kirimkarya/db";
 import { eq } from "drizzle-orm";
 import sharp from "sharp";
 import { HttpError } from "../../core/exceptions/http-error";
+import { Readable } from "stream";
 
 export class AuthService {
     /**
-     * Processes and uploads a user avatar to S3
-     * @param file The raw uploaded File object
+     * Processes and uploads a user avatar to S3 via streaming
+     * @param fileStream The raw uploaded file stream
      * @param userId The ID of the currently logged-in user
+     * @param mimeType The content type of the uploaded file
      * @throws {HttpError} If processing or upload fails
      * @returns The public proxy URL of the uploaded image
      */
-    async uploadAvatar(file: File, userId: string): Promise<string> {
+    async uploadAvatarStream(fileStream: Readable, userId: string, mimeType: string): Promise<string> {
         try {
             const currentUser = await db
                 .select({ image: user.image })
@@ -22,21 +24,24 @@ export class AuthService {
 
             const oldAvatarUrl = currentUser[0]?.image;
 
-            const bytes = await file.arrayBuffer();
-            const inputBuffer = Buffer.from(bytes);
-
-            const processedBuffer = await sharp(inputBuffer)
+            // Pipeline: Input stream -> Sharp resizing & conversion to WebP -> Web Stream -> S3 write
+            const transformer = sharp()
                 .resize(512, 512, {
                     fit: "cover",
                     position: "center",
                 })
-                .webp({ quality: 80 })
-                .toBuffer();
+                .webp({ quality: 80 });
+
+            // Pipe input stream to sharp transformer
+            fileStream.pipe(transformer);
+
+            // Convert Sharp stream (Readable) to Web ReadableStream
+            const webStream = Readable.toWeb(transformer);
 
             const filename = `avatar/${userId}/${crypto.randomUUID()}.webp`;
             const fileRef = s3.file(filename);
 
-            await fileRef.write(processedBuffer, {
+            await fileRef.write(webStream as any, {
                 type: "image/webp",
             });
 
@@ -57,16 +62,15 @@ export class AuthService {
             }
 
             return publicUrl;
-        } catch (error: any) {
-            console.error("AuthService.uploadAvatar Error:", error);
+        } catch (error: unknown) {
+            console.error("AuthService.uploadAvatarStream Error:", error);
             throw new HttpError(
                 500,
                 "Failed to process and upload avatar",
-                error.message
+                error instanceof Error ? error.message : String(error)
             );
         }
     }
 }
-
 
 export const authService = new AuthService();

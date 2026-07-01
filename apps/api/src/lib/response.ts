@@ -32,15 +32,15 @@ export interface PaginationMeta {
     totalPages: number;
 }
 
-export interface ApiSuccessResponse<T = any> {
+export interface ApiSuccessResponse<T = unknown> {
     message: string;
     data: T;
-    meta?: any;
+    meta?: Record<string, unknown>;
 }
 
 export interface ApiErrorResponse {
     message: string;
-    error?: any;
+    error?: unknown;
 }
 
 export interface ApiResponse<T = unknown> {
@@ -55,7 +55,7 @@ export const apiResponse = {
     success: <T>(
         data: T,
         message: string = "Success",
-        meta?: any
+        meta?: Record<string, unknown>
     ): ApiSuccessResponse<T> => {
         return {
             message,
@@ -66,7 +66,7 @@ export const apiResponse = {
     /*  */
     error: (
         message: string = "Internal Server Error",
-        errorDetails: any = null
+        errorDetails: unknown = null
     ): ApiErrorResponse => {
         return {
             message,

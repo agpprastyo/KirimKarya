@@ -336,7 +336,7 @@ const routes = galleriesRoutes
                     try {
                         const [inserted] = await db.insert(photos).values({ galleryId, filename, originalS3Key, status: "PENDING" }).returning();
                         newPhoto = inserted;
-                    } catch (dbErr: any) { reject(new Error("Failed to create photo record")); fileStream.resume(); return; }
+                    } catch (dbErr: unknown) { reject(new Error("Failed to create photo record")); fileStream.resume(); return; }
                     if (!newPhoto) { reject(new Error("Failed to create photo record")); fileStream.resume(); return; }
                     fileStream.on("limit", async () => {
                         if (newPhoto) {
@@ -350,19 +350,20 @@ const routes = galleriesRoutes
                         await withS3Breaker(() => s3.file(originalS3Key).write(webStream as any, { type: mimeType }));
                         if (fileStream.truncated) { throw new Error("File size exceeds 50MB limit."); }
                         resolve(newPhoto.id);
-                    } catch (uploadError: any) {
+                    } catch (uploadError: unknown) {
                         await db.delete(photos).where(eq(photos.id, newPhoto.id)).catch(() => {});
                         try { await s3.file(originalS3Key).delete(); } catch {}
                         reject(uploadError);
                     }
                 });
-                busboy.on("error", (err: any) => reject(err));
+                busboy.on("error", (err: unknown) => reject(err));
                 busboy.on("finish", () => { if (!fileProcessed) { reject(new Error("No file uploaded")); } });
                 const nodeReqStream = Readable.fromWeb(c.req.raw.body as any);
                 nodeReqStream.pipe(busboy);
             });
-        } catch (err: any) {
-            return c.json(apiResponse.error(err.message || "Failed to upload photo"), 400);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Failed to upload photo";
+            return c.json(apiResponse.error(message), 400);
         }
         await db.update(photos).set({ status: "PROCESSING" }).where(eq(photos.id, newPhotoId));
         const [newPhoto] = await db.select().from(photos).where(eq(photos.id, newPhotoId));

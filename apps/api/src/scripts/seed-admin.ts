@@ -1,4 +1,4 @@
-import { env } from "../env";
+import { env } from "@kirimkarya/env";
 
 async function seedAdmin() {
     const { db, user: userTable } = await import("@kirimkarya/db");
@@ -10,7 +10,7 @@ async function seedAdmin() {
         console.error("❌ DATABASE_URL is not defined in environment.");
         process.exit(1);
     }
-    console.log(`DATABASE_URL: ${env.DATABASE_URL.replace(/:[^:@]+@/, ":****@")}`);
+    console.log(`DATABASE_URL: ${env.DATABASE_URL.replace(/:[^:@]+@/, ":****@")}\n`);
 
     const { values } = parseArgs({
         options: {
@@ -63,7 +63,7 @@ async function seedAdmin() {
         console.log(`Email: ${email}`);
         console.log(`Password: ${password}`);
         process.exit(0);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("❌ Error seeding admin:");
         console.error(error);
         process.exit(1);

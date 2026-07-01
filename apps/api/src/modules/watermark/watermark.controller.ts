@@ -4,8 +4,11 @@ import { db, user, photos, galleries } from "@kirimkarya/db";
 import { photoQueue } from "@kirimkarya/queue";
 import { redis } from "@kirimkarya/redis";
 import { eq } from "drizzle-orm";
-import { s3 } from "@kirimkarya/storage";
+import { s3, withS3Breaker } from "@kirimkarya/storage";
 import type { HonoEnv } from "../../core/types/hono";
+import { UpdateWatermarkSchema, UploadWatermarkImageSchema } from "./watermark.schema";
+import Busboy from "busboy";
+import { Readable } from "stream";
 
 const watermarkRoutes = new OpenAPIHono<HonoEnv>();
 
@@ -53,11 +56,7 @@ const updateWatermarkRoute = createRoute({
         body: {
             content: {
                 "application/json": {
-                    schema: z.object({
-                        watermarkType: z.enum(["TEXT", "IMAGE"]),
-                        watermarkText: z.string().min(1).max(50),
-                        watermarkOpacity: z.number().min(10).max(100),
-                    }),
+                    schema: UpdateWatermarkSchema,
                 },
             },
         },
@@ -92,9 +91,7 @@ const uploadWatermarkImageRoute = createRoute({
         body: {
             content: {
                 "multipart/form-data": {
-                    schema: z.object({
-                        file: z.any().openapi({ type: "string", format: "binary" }),
-                    }),
+                    schema: UploadWatermarkImageSchema,
                 },
             },
         },
@@ -222,20 +219,10 @@ const routes = watermarkRoutes
         const authUser = c.get("user");
         if (!authUser) return c.json(apiResponse.error("Unauthorized"), 401);
 
-        const body = await c.req.parseBody();
-        const file = body["file"] as File;
-
-        if (!file || !file.size) {
-            return c.json(apiResponse.error("No file uploaded"), 400);
-        }
-
         const MAX_SIZE = 2 * 1024 * 1024; // 2MB max
-        if (file.size > MAX_SIZE) {
+        const contentLength = c.req.header("content-length");
+        if (contentLength && parseInt(contentLength, 10) > MAX_SIZE) {
             return c.json(apiResponse.error("Logo file size exceeds 2MB limit."), 400);
-        }
-
-        if (file.type !== "image/png") {
-            return c.json(apiResponse.error("Only transparent .png format is supported for watermarks."), 400);
         }
 
         // Get old watermark image key for cleanup
@@ -245,15 +232,49 @@ const routes = watermarkRoutes
             .where(eq(user.id, authUser.id))
             .limit(1);
 
-        const bytes = await file.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-
-        // Store as transparent PNG starting with user ID folder
         const key = `${authUser.id}/watermark/${crypto.randomUUID()}.png`;
-        const fileRef = s3.file(key);
-        await fileRef.write(buffer, {
-            type: "image/png",
-        });
+
+        try {
+            await new Promise<void>((resolve, reject) => {
+                const busboy = Busboy({
+                    headers: { "content-type": c.req.header("content-type") || "" },
+                    limits: { files: 1, fileSize: MAX_SIZE },
+                });
+                let fileProcessed = false;
+                busboy.on("file", async (fieldname, fileStream, info) => {
+                    const { filename, mimeType } = info;
+                    if (fieldname !== "file") { fileStream.resume(); return; }
+                    fileProcessed = true;
+                    if (mimeType !== "image/png") {
+                        reject(new Error("Only transparent .png format is supported for watermarks."));
+                        fileStream.resume();
+                        return;
+                    }
+                    fileStream.on("limit", () => {
+                        reject(new Error("Logo file size exceeds 2MB limit."));
+                    });
+                    const webStream = Readable.toWeb(fileStream);
+                    try {
+                        const fileRef = s3.file(key);
+                        await withS3Breaker(() => fileRef.write(webStream as any, { type: "image/png" }));
+                        resolve();
+                    } catch (uploadError) {
+                        reject(uploadError);
+                    }
+                });
+                busboy.on("error", (err: unknown) => reject(err));
+                busboy.on("finish", () => {
+                    if (!fileProcessed) {
+                        reject(new Error("No file uploaded"));
+                    }
+                });
+                const nodeReqStream = Readable.fromWeb(c.req.raw.body as any);
+                nodeReqStream.pipe(busboy);
+            });
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Failed to upload watermark image";
+            return c.json(apiResponse.error(message), 400);
+        }
 
         // Update database
         await db

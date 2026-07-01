@@ -610,7 +610,7 @@ const routes = adminRoutes
                 }),
                 200
             );
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("[Admin Stats] Failed to build summaries:", err);
             return c.json(apiResponse.error("Internal Server Error"), 500);
         }
@@ -694,7 +694,7 @@ const routes = adminRoutes
                 }),
                 200
             );
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("[Admin Galleries] List failed:", err);
             return c.json(apiResponse.error("Internal Server Error"), 500);
         }
@@ -713,7 +713,7 @@ const routes = adminRoutes
                 .where(eq(galleries.id, id));
 
             return c.json(apiResponse.success({ success: true }), 200);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("[Admin Gallery Status] Override failed:", err);
             return c.json(apiResponse.error("Internal Server Error"), 500);
         }
@@ -748,7 +748,7 @@ const routes = adminRoutes
             ).catch((err) => console.error("[Admin Cascade Cleanup] S3 deletion errors:", err));
 
             return c.json(apiResponse.success({ success: true }), 200);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("[Admin Gallery Delete] Cascade failed:", err);
             return c.json(apiResponse.error("Internal Server Error"), 500);
         }
@@ -782,7 +782,7 @@ const routes = adminRoutes
                 }),
                 200
             );
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("[Admin Jobs Stats] Failed:", err);
             return c.json(apiResponse.error("Internal Server Error"), 500);
         }
@@ -802,7 +802,7 @@ const routes = adminRoutes
 
             await job.retry();
             return c.json(apiResponse.success({ success: true }), 200);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("[Admin Job Retry] Failed:", err);
             return c.json(apiResponse.error("Internal Server Error"), 500);
         }
@@ -818,7 +818,7 @@ const routes = adminRoutes
             const failedJobs = await queue.getFailed();
             await Promise.all(failedJobs.map(job => job.retry().catch(() => {})));
             return c.json(apiResponse.success({ success: true, count: failedJobs.length }), 200);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("[Admin Job Retry All] Failed:", err);
             return c.json(apiResponse.error("Internal Server Error"), 500);
         }
@@ -838,7 +838,7 @@ const routes = adminRoutes
 
             await job.remove();
             return c.json(apiResponse.success({ success: true }), 200);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("[Admin Job Remove] Failed:", err);
             return c.json(apiResponse.error("Internal Server Error"), 500);
         }
@@ -855,7 +855,7 @@ const routes = adminRoutes
             const count = failedJobs.length;
             await Promise.all(failedJobs.map(job => job.remove().catch(() => {})));
             return c.json(apiResponse.success({ success: true, count }), 200);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("[Admin Job Purge Failed] Failed:", err);
             return c.json(apiResponse.error("Internal Server Error"), 500);
         }
