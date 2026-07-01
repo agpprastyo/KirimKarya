@@ -11,9 +11,10 @@ import {
 import { publicService } from "./public.service";
 import { notificationQueue } from "@kirimkarya/queue";
 import { s3 } from "@kirimkarya/storage";
-import { db, galleries, photos, feedbacks, eq, count, and } from "@kirimkarya/db";
+import { db, galleries, photos, feedbacks } from "@kirimkarya/db";
+import { eq, count, and } from "drizzle-orm";
 import type { HonoEnv } from "../../core/types/hono";
-import { env } from "../../env";
+import { env } from "@kirimkarya/env";
 import { setCookie, getCookie } from "hono/cookie";
 
 const publicRoutes = new OpenAPIHono<HonoEnv>();
@@ -369,7 +370,8 @@ const routes = publicRoutes
     .openapi(listPublicPhotosRoute, async (c) => {
         const { id: galleryId } = c.req.valid("param");
         const accessCookie = getCookie(c, `gallery_access_${galleryId}`);
-        const clientId = accessCookie || c.req.header("x-client-id") || "anonymous";
+        const resolvedEmail = await publicService.resolveClientEmail(galleryId, accessCookie);
+        const clientId = resolvedEmail || c.req.header("x-client-id") || "anonymous";
 
         const gallery = await publicService.getGalleryMetadata(galleryId);
         if (!gallery) return c.json(apiResponse.error("Gallery not found"), 404);
@@ -381,10 +383,8 @@ const routes = publicRoutes
             }
         }
 
-        if (gallery.isPrivate) {
-            if (!accessCookie) {
-                return c.json(apiResponse.error("Gallery access required"), 403);
-            }
+        if (gallery.isPrivate && !resolvedEmail) {
+            return c.json(apiResponse.error("Gallery access required"), 403);
         }
 
         const photos = await publicService.getGalleryPhotos(galleryId);
@@ -427,11 +427,13 @@ const routes = publicRoutes
         if (!gallery) return c.json(apiResponse.error("Gallery not found"), 404);
 
         const accessCookie = getCookie(c, `gallery_access_${galleryId}`);
-        if (gallery.isPrivate && !accessCookie) {
+        const resolvedEmail = await publicService.resolveClientEmail(galleryId, accessCookie);
+
+        if (gallery.isPrivate && !resolvedEmail) {
             return c.json(apiResponse.error("Gallery access required"), 403);
         }
 
-        const clientId = accessCookie || c.req.header("x-client-id");
+        const clientId = resolvedEmail || c.req.header("x-client-id");
         if (!clientId) return c.json(apiResponse.error("Client identifier required"), 400);
 
         // Enforce selection limit validations
@@ -486,11 +488,13 @@ const routes = publicRoutes
         if (!gallery) return c.json(apiResponse.error("Gallery not found"), 404);
 
         const accessCookie = getCookie(c, `gallery_access_${galleryId}`);
-        if (gallery.isPrivate && !accessCookie) {
+        const resolvedEmail = await publicService.resolveClientEmail(galleryId, accessCookie);
+
+        if (gallery.isPrivate && !resolvedEmail) {
             return c.json(apiResponse.error("Gallery access required"), 403);
         }
 
-        const clientId = accessCookie || c.req.header("x-client-id");
+        const clientId = resolvedEmail || c.req.header("x-client-id");
         if (!clientId) return c.json(apiResponse.error("Client identifier required"), 400);
 
         const feedbacks = await publicService.getClientFeedbacks(galleryId, clientId);
@@ -525,12 +529,13 @@ const routes = publicRoutes
             return c.json(apiResponse.error(result.error || "Verification failed"), 401);
         }
 
-        setCookie(c, `gallery_access_${galleryId}`, email, {
+        // SEC-5: Store opaque token (not raw email PII) in the cookie
+        setCookie(c, `gallery_access_${galleryId}`, result.accessToken!, {
             path: "/",
             maxAge: 60 * 60 * 24 * 7,
             httpOnly: true,
             sameSite: "Lax",
-            secure: process.env.NODE_ENV === "production",
+            secure: env.NODE_ENV === "production",
         });
 
         return c.json(apiResponse.success({ success: true }), 200);
@@ -547,12 +552,13 @@ const routes = publicRoutes
             return c.json(apiResponse.error(result.error || "Invalid password"), 401);
         }
 
-        setCookie(c, `gallery_access_${galleryId}`, email, {
+        // SEC-5: Store opaque token (not raw email PII) in the cookie
+        setCookie(c, `gallery_access_${galleryId}`, result.accessToken!, {
             path: "/",
             maxAge: 60 * 60 * 24 * 7,
             httpOnly: true,
             sameSite: "Lax",
-            secure: process.env.NODE_ENV === "production",
+            secure: env.NODE_ENV === "production",
         });
 
         return c.json(apiResponse.success({ success: true }), 200);
@@ -565,7 +571,8 @@ const routes = publicRoutes
 
         if (gallery.isPrivate) {
             const accessCookie = getCookie(c, `gallery_access_${galleryId}`);
-            if (!accessCookie) {
+            const resolvedEmail = await publicService.resolveClientEmail(galleryId, accessCookie);
+            if (!resolvedEmail) {
                 return c.json(apiResponse.error("Gallery access required"), 403);
             }
         }
