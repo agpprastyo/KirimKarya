@@ -1,6 +1,27 @@
-import { db, galleries, photos, feedbacks, galleryAccess, eq, and, sql } from "@kirimkarya/db";
+import { db, galleries, photos, feedbacks, galleryAccess } from "@kirimkarya/db";
+import { eq, and, sql } from "drizzle-orm";
 import { redis } from "@kirimkarya/redis";
 import { sendOTPEmail } from "@kirimkarya/mail";
+import { createHash, randomBytes } from "crypto";
+
+// SEC-3: Brute-force protection — max 5 attempts per 15 minutes per gallery+email
+const MAX_VERIFY_ATTEMPTS = 5;
+const VERIFY_WINDOW_SECONDS = 15 * 60;
+
+async function checkRateLimit(galleryId: string, email: string, action: string): Promise<boolean> {
+    const key = `ratelimit:${action}:${galleryId}:${email}`;
+    const attempts = await redis.incr(key);
+    if (attempts === 1) {
+        await redis.expire(key, VERIFY_WINDOW_SECONDS);
+    }
+    return attempts <= MAX_VERIFY_ATTEMPTS;
+}
+
+// SEC-5: Generate an opaque access token (not raw email) to store in the cookie
+function generateAccessToken(galleryId: string, email: string): string {
+    const salt = randomBytes(16).toString("hex");
+    return createHash("sha256").update(`${galleryId}:${email}:${salt}`).digest("hex") + "." + salt;
+}
 
 export class PublicService {
     async getGalleryMetadata(id: string) {
@@ -48,8 +69,18 @@ export class PublicService {
         return gallery;
     }
 
-    async getGalleryPhotos(galleryId: string) {
-        return await db
+    async getGalleryPhotos(galleryId: string): Promise<{
+        id: string;
+        thumbnailS3Key: string | null;
+        watermarkS3Key: string | null;
+    }[]> {
+        const cacheKey = `cache:gallery:${galleryId}:photos`;
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            return JSON.parse(cached) as any;
+        }
+
+        const list = await db
             .select({
                 id: photos.id,
                 thumbnailS3Key: photos.thumbnailS3Key,
@@ -58,6 +89,10 @@ export class PublicService {
             .from(photos)
             .where(and(eq(photos.galleryId, galleryId), eq(photos.status, 'READY')))
             .orderBy(photos.uploadedAt);
+
+        await redis.set(cacheKey, JSON.stringify(list));
+        await redis.expire(cacheKey, 3600); // 1 hour TTL
+        return list;
     }
 
     async toggleFeedback(photoId: string, clientIdentifier: string, isSelected?: boolean, comment?: string) {
@@ -124,6 +159,16 @@ export class PublicService {
 
         if (!access) return { success: false, error: "Email not authorized for this gallery" };
 
+        // SEC-3: Rate limit OTP generation requests to prevent email spam/bombing (max 3 requests per 5 minutes)
+        const requestLimitKey = `ratelimit:request-otp:${galleryId}:${email}`;
+        const requestAttempts = (await redis.incr(requestLimitKey)) as number;
+        if (requestAttempts === 1) {
+            await redis.expire(requestLimitKey, 5 * 60);
+        }
+        if (requestAttempts > 3) {
+            return { success: false, error: "Too many OTP requests. Please wait 5 minutes before trying again." };
+        }
+
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
         const redisKey = `otp:${galleryId}:${email}`;
@@ -141,6 +186,12 @@ export class PublicService {
     }
 
     async verifyOTP(galleryId: string, email: string, code: string) {
+        // SEC-3: Rate limit OTP verification attempts
+        const allowed = await checkRateLimit(galleryId, email, "otp");
+        if (!allowed) {
+            return { success: false, error: "Too many attempts. Please wait 15 minutes before trying again." };
+        }
+
         const redisKey = `otp:${galleryId}:${email}`;
         const storedOtp = await redis.get(redisKey);
 
@@ -148,12 +199,26 @@ export class PublicService {
             return { success: false, error: "Invalid or expired verification code" };
         }
 
+        // On successful verification, clear the brute-force attempts and request limit locks
         await redis.del(redisKey);
+        await redis.del(`ratelimit:otp:${galleryId}:${email}`);
+        await redis.del(`ratelimit:request-otp:${galleryId}:${email}`);
 
-        return { success: true };
+        // SEC-5: Return an opaque token to store in cookie instead of raw email
+        const accessToken = generateAccessToken(galleryId, email);
+        // Store the mapping so we can resolve the token later if needed
+        await redis.set(`access_token:${galleryId}:${accessToken}`, email, "EX", 60 * 60 * 24 * 7);
+
+        return { success: true, accessToken };
     }
 
     async verifyStaticPassword(galleryId: string, email: string, password: string) {
+        // SEC-3: Rate limit password verification attempts
+        const allowed = await checkRateLimit(galleryId, email, "password");
+        if (!allowed) {
+            return { success: false, error: "Too many attempts. Please wait 15 minutes before trying again." };
+        }
+
         const [gallery] = await db
             .select({
                 passwordHash: galleries.passwordHash,
@@ -184,7 +249,20 @@ export class PublicService {
             return { success: false, error: "Invalid password" };
         }
 
-        return { success: true };
+        // On successful verification, clear static password rate-limiting attempts lock
+        await redis.del(`ratelimit:password:${galleryId}:${email}`);
+
+        // SEC-5: Return an opaque token to store in cookie instead of raw email
+        const accessToken = generateAccessToken(galleryId, email);
+        await redis.set(`access_token:${galleryId}:${accessToken}`, email, "EX", 60 * 60 * 24 * 7);
+
+        return { success: true, accessToken };
+    }
+
+    async resolveClientEmail(galleryId: string, token: string | undefined): Promise<string | null> {
+        if (!token) return null;
+        const email = await redis.get(`access_token:${galleryId}:${token}`);
+        return (email as string) || null;
     }
 }
 
