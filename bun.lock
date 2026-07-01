@@ -22,6 +22,7 @@
         "@kirimkarya/db": "workspace:*",
         "@kirimkarya/env": "workspace:*",
         "@kirimkarya/mail": "workspace:*",
+        "@kirimkarya/observability": "workspace:*",
         "@kirimkarya/queue": "workspace:*",
         "@kirimkarya/redis": "workspace:*",
         "@kirimkarya/storage": "workspace:*",

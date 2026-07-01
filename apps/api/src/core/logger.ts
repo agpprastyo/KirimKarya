@@ -1,3 +1,5 @@
+import { trace } from "@kirimkarya/observability";
+
 type LogLevel = "info" | "warn" | "error" | "debug";
 
 export interface LogContext {
@@ -34,6 +36,13 @@ export class Logger {
             level,
             message,
         };
+
+        const activeSpan = trace.getActiveSpan();
+        if (activeSpan) {
+            const spanContext = activeSpan.spanContext();
+            payload.trace_id = spanContext.traceId;
+            payload.span_id = spanContext.spanId;
+        }
 
         if (error !== undefined) {
             payload.error = this.formatError(error);
