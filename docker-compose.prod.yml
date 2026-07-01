@@ -1,0 +1,154 @@
+# docker-compose.prod.yml — Production stack for KirimKarya (modular monolith)
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Required env file: .env.production (copy from .env.production.example)
+
+name: kirimkarya-prod
+
+services:
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: kirimkarya-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-kirimkarya}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME:-kirimkarya}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: kirimkarya-redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── Application services ────────────────────────────────────────────────────
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: kirimkarya-api
+    restart: unless-stopped
+    env_file: .env.production
+    networks:
+      - internal
+      - proxy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    container_name: kirimkarya-worker
+    restart: unless-stopped
+    env_file: .env.production
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        PUBLIC_API_URL: ${PUBLIC_API_URL}
+        PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
+    container_name: kirimkarya-web
+    restart: unless-stopped
+    env_file: .env.production
+    networks:
+      - proxy
+    depends_on:
+      - api
+
+  # ── Reverse Proxy (auto TLS via Let's Encrypt) ──────────────────────────────
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: kirimkarya-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN:-kirimkarya.com}
+    networks:
+      - proxy
+    depends_on:
+      - api
+      - web
+
+  # ── Database migrations (runs once then exits) ──────────────────────────────
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: kirimkarya-migrate
+    restart: "no"
+    env_file: .env.production
+    working_dir: /app/packages/db
+    command: ["bun", "x", "--bun", "drizzle-kit", "migrate"]
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    driver: bridge
+  proxy:
+    driver: bridge

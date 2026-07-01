@@ -1,0 +1,84 @@
+# docker-compose.ci.yml — CI/CD environment for KirimKarya
+# Digunakan oleh GitHub Actions dan lokal untuk testing dengan LocalStack Pro
+#
+# Usage:
+#   docker compose -f docker-compose.ci.yml up -d
+#   ./scripts/localstack-setup.sh
+
+name: kirimkarya-ci
+
+services:
+
+  # ── LocalStack Pro (emulasi AWS S3, SQS, SES, SSM) ──────────────────────────
+  localstack:
+    image: localstack/localstack-pro:latest
+    container_name: kirimkarya-localstack
+    ports:
+      - "4566:4566"      # LocalStack Gateway (semua services)
+      - "4510-4559:4510-4559"  # Port range untuk services tambahan
+    environment:
+      # Auth token dari LocalStack Pro (wajib untuk SES, SSM, dll)
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN}
+      # Services yang diaktifkan
+      SERVICES: s3,sqs,ses,ssm,iam
+      # Region default
+      AWS_DEFAULT_REGION: us-east-1
+      # Agar data tidak persisten antar run (untuk CI reproducibility)
+      PERSISTENCE: 0
+      # Log level
+      LS_LOG: warn
+      # Docker socket untuk fitur Pro
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - ci-internal
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    container_name: kirimkarya-ci-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-ci_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ci_password}
+      POSTGRES_DB: ${DB_NAME:-kirimkarya_ci}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_ci_data:/var/lib/postgresql/data
+    networks:
+      - ci-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ci_user} -d ${DB_NAME:-kirimkarya_ci}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Redis ─────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: kirimkarya-ci-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - ci-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  localstack_data:
+  postgres_ci_data:
+
+networks:
+  ci-internal:
+    driver: bridge

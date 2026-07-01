@@ -1,0 +1,25 @@
+# Caddyfile — Reverse proxy for KirimKarya (modular monolith)
+# Replace {$DOMAIN} with your actual domain, e.g. kirimkarya.com
+# Caddy auto-provisions TLS via Let's Encrypt
+
+{$DOMAIN} {
+    # Web frontend (SvelteKit)
+    handle /* {
+        reverse_proxy web:3002
+    }
+}
+
+api.{$DOMAIN} {
+    # API server (Hono)
+    handle /api/auth/* {
+        reverse_proxy api:3000
+    }
+
+    handle /api/* {
+        reverse_proxy api:3000
+    }
+
+    handle /* {
+        reverse_proxy api:3000
+    }
+}
