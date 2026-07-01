@@ -413,10 +413,56 @@ Jika logika dipakai oleh >1 app, pindahkan ke package yang sesuai:
 - `apps/web/src/paraglide/` → di-generate oleh ParaglideJS.
 - `apps/web/src/lib/paraglide/` → di-generate oleh ParaglideJS.
 
----
 
 > **Referensi tambahan:**
 > - Architecture docs: [`/design/high-level.md`](/design/high-level.md), [`/design/low-level.md`](/design/low-level.md)
 > - Review lengkap: [`/reviews/`](/reviews/)
 > - DaisyUI class reference: [`.agents/daisy-ui.txt`](.agents/daisy-ui.txt)
 > - Workflow setup: [`.agents/workflows/setup.md`](.agents/workflows/setup.md)
+
+---
+
+## 10. GIT BRANCHING STRATEGY
+
+> Full design spec: `docs/superpowers/specs/2026-07-01-branching-strategy-design.md` (private repo only)
+
+### Branch Structure
+
+- **`master`** = satu-satunya branch permanen di public repo. Selalu bersih, tested, dan bisa di-deploy.
+- **Branch sementara** dibuat dari `master`, dihapus setelah merge.
+
+### Naming Convention
+
+| Prefix | Contoh | Kapan dipakai |
+|--------|--------|--------------|
+| `feat/` | `feat/gallery-sharing` | Fitur baru |
+| `fix/` | `fix/otp-rate-limit` | Bug fix |
+| `hotfix/` | `hotfix/auth-crash` | Fix kritis langsung ke master |
+| `refactor/` | `refactor/query-perf` | Peningkatan kode tanpa fitur baru |
+| `chore/` | `chore/update-deps` | Maintenance, deps update |
+| `wip/` | `wip/redis-experiment` | **Tidak pernah di-push ke `origin` (public)** |
+
+### Dual-Remote Rules
+
+```
+origin  → github.com/agpprastyo/KirimKarya         (PUBLIC)
+private → github.com/agpprastyo/KirimKarya-internal (PRIVATE)
+```
+
+- `wip/*` branch → **hanya ke `private`**, tidak pernah ke `origin`
+- `feat/`, `fix/`, `refactor/` → ke `private` kapan saja, ke `origin` **hanya setelah merge ke `master`**
+- `docs/superpowers/` dan `.superpowers/` → **hanya ke `private`** (ada di `.gitignore` untuk `origin`)
+
+### Pre-Merge Checklist (sebelum push ke `origin master`)
+
+- [ ] `bun test` → 0 failures
+- [ ] `bun x tsc --noEmit` → 0 errors  
+- [ ] Tidak ada file `docs/superpowers/`, `.superpowers/`, atau `.env*` yang staged
+
+### Commit Message Convention
+
+Format: `<type>(<scope>): <deskripsi singkat>`
+
+Types: `feat` | `fix` | `refactor` | `chore` | `docs` | `test` | `perf` | `ci`
+
+Contoh: `feat(gallery): add password-protected access mode`
