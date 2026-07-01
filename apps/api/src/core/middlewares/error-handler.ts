@@ -1,13 +1,13 @@
 import type { Context } from "hono";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { HttpError } from "../exceptions/http-error";
 import { apiResponse } from "../../lib/response";
-import { env } from "../../env";
+import { env } from "@kirimkarya/env";
 
 export const errorHandler = (err: Error, c: Context) => {
 
     if (err instanceof ZodError) {
-        const formattedErrors = err.issues.map((e: any) => ({
+        const formattedErrors = err.issues.map((e: z.ZodIssue) => ({
             field: e.path.join("."),
             message: e.message,
         }));

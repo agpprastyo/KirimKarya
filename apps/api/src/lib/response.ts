@@ -13,7 +13,7 @@ export const createApiResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =
     });
 };
 
-export const ApiErrorSchema = (message: string = "Internal Server Error", errorDetails: any = null) => {
+export const ApiErrorSchema = (message: string = "Internal Server Error", errorDetails: unknown = null) => {
     return z.object({
         message: z.string(),
         error: z.any().optional(),
@@ -41,6 +41,14 @@ export interface ApiSuccessResponse<T = any> {
 export interface ApiErrorResponse {
     message: string;
     error?: any;
+}
+
+export interface ApiResponse<T = unknown> {
+    success: boolean;
+    message: string;
+    data?: T;
+    meta?: Record<string, unknown>;
+    error?: unknown;
 }
 
 export const apiResponse = {
