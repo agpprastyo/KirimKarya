@@ -54,6 +54,8 @@ services:
       - "3015:3000"
     volumes:
       - ./config/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./config/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml
+      - ./config/dashboards:/etc/grafana/provisioning/dashboards/files
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     deploy:
