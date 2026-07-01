@@ -114,7 +114,7 @@ export class PublicService {
             .where(and(eq(feedbacks.photoId, photoId), eq(feedbacks.clientIdentifier, clientIdentifier)));
 
         if (existing) {
-            const updateData: any = { updatedAt: new Date() };
+            const updateData: Partial<typeof feedbacks.$inferInsert> = { updatedAt: new Date() };
             if (isSelected !== undefined) updateData.isSelected = isSelected;
             if (comment !== undefined) updateData.comment = comment;
 
