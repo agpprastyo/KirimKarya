@@ -20,51 +20,61 @@ const mockPublicGallery = {
 };
 
 // Mock database
+export let transactionCalled = false;
+
 mock.module("@kirimkarya/db", () => {
-    return {
-        db: {
-            execute: async () => [{ '?column?': 1 }],
-            select: (fields?: any) => {
-                const chain = {
-                    from: () => chain,
-                    where: () => {
-                        let result: any = [mockPublicGallery];
-                        if (fields) {
-                            const keys = Object.keys(fields);
-                            if (keys.length === 1 && keys[0] === 'galleryId') {
-                                result = [{ galleryId: mockGalleryId }];
-                            } else if (keys.length === 1 && keys[0] === 'id') {
-                                result = [{ id: "feedback-123" }];
-                            } else if (keys.includes('count')) {
-                                result = [{ count: 0 }];
-                            } else if (keys.includes('photoId')) {
-                                result = [];
-                            } else {
-                                result = [mockPublicGallery];
-                            }
+    const mockDb: any = {
+        transaction: async (callback: any) => {
+            transactionCalled = true;
+            return await callback(mockDb);
+        },
+        delete: () => ({
+            where: () => Promise.resolve()
+        }),
+        execute: async () => [{ '?column?': 1 }],
+        select: (fields?: any) => {
+            const chain = {
+                from: () => chain,
+                where: () => {
+                    let result: any = [mockPublicGallery];
+                    if (fields) {
+                        const keys = Object.keys(fields);
+                        if (keys.length === 1 && keys[0] === 'galleryId') {
+                            result = [{ galleryId: mockGalleryId }];
+                        } else if (keys.length === 1 && keys[0] === 'id') {
+                            result = [{ id: "feedback-123" }];
+                        } else if (keys.includes('count')) {
+                            result = [{ count: 0 }];
+                        } else if (keys.includes('photoId')) {
+                            result = [];
+                        } else {
+                            result = [mockPublicGallery];
                         }
-                        const base: any = result;
-                        base.orderBy = () => [{ id: "photo-1", thumbnailS3Key: "t1.jpg", watermarkS3Key: "w1.jpg" }];
-                        base.limit = () => base;
-                        return base;
-                    },
-                    innerJoin: () => chain,
-                };
-                return chain;
-            },
-            update: () => ({
-                set: () => ({
-                    where: () => ({
-                        returning: () => [{ id: "feedback-123" }]
-                    })
-                })
-            }),
-            insert: () => ({
-                values: () => ({
+                    }
+                    const base: any = result;
+                    base.orderBy = () => [{ id: "photo-1", thumbnailS3Key: "t1.jpg", watermarkS3Key: "w1.jpg" }];
+                    base.limit = () => base;
+                    return base;
+                },
+                innerJoin: () => chain,
+            };
+            return chain;
+        },
+        update: () => ({
+            set: () => ({
+                where: () => ({
                     returning: () => [{ id: "feedback-123" }]
                 })
-            }),
-        },
+            })
+        }),
+        insert: () => ({
+            values: () => ({
+                returning: () => [{ id: "feedback-123" }]
+            })
+        }),
+    };
+    return {
+        db: mockDb,
         galleries: {
             id: "id",
             selectionLimit: "selectionLimit",
@@ -90,6 +100,21 @@ mock.module("@kirimkarya/db", () => {
         }
     };
 });
+
+// Mock better-auth
+mock.module("../../src/modules/auth/auth.config", () => ({
+    auth: {
+        api: {
+            getSession: async ({ headers }: any) => {
+                const authHeader = headers?.Authorization || headers?.get?.("Authorization");
+                if (authHeader === "Bearer user-owner") {
+                    return { user: { id: "user-abc", email: "owner@example.com" } };
+                }
+                return null;
+            }
+        }
+    }
+}));
 
 // Mock redis
 mock.module("@kirimkarya/redis", () => ({
@@ -184,5 +209,30 @@ describe("Public Endpoints API Integration Tests", () => {
         } finally {
             mockIsPrivate = false;
         }
+    });
+
+    test("POST /api/v1/photos/bulk-delete returns 200 and performs atomic deletions", async () => {
+        // Reset tracking variable
+        transactionCalled = false;
+
+        const response = await app.request(
+            "/api/v1/photos/bulk-delete",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer user-owner",
+                },
+                body: JSON.stringify({
+                    ids: [mockGalleryId],
+                }),
+            }
+        );
+
+        expect(response.status).toBe(200);
+        const body = (await response.json()) as any;
+        expect(body.message).toBe("Success");
+        expect(body.data.deletedCount).toBe(1);
+        expect(transactionCalled).toBe(true);
     });
 });
