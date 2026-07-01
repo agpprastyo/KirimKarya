@@ -29,10 +29,10 @@ export class Logger {
 
     private formatLog(level: LogLevel, message: string, context?: LogContext, error?: unknown) {
         const payload: Record<string, unknown> = {
+            ...context,
             timestamp: new Date().toISOString(),
             level,
             message,
-            ...context,
         };
 
         if (error !== undefined) {

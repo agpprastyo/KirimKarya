@@ -30,18 +30,17 @@ describe("Core Logger", () => {
     test("formatError handles stack based on NODE_ENV", () => {
         const err = new Error("Test stack");
         const originalNodeEnv = process.env.NODE_ENV;
+        try {
+            process.env.NODE_ENV = "test";
+            const formattedTest = (logger as any).formatError(err);
+            expect(formattedTest.stack).toBeUndefined();
 
-        // In non-development (test/production), stack should be undefined
-        process.env.NODE_ENV = "test";
-        const formattedTest = (logger as any).formatError(err);
-        expect(formattedTest.stack).toBeUndefined();
-
-        // In development, stack should be populated
-        process.env.NODE_ENV = "development";
-        const formattedDev = (logger as any).formatError(err);
-        expect(formattedDev.stack).toBeDefined();
-
-        process.env.NODE_ENV = originalNodeEnv;
+            process.env.NODE_ENV = "development";
+            const formattedDev = (logger as any).formatError(err);
+            expect(formattedDev.stack).toBeDefined();
+        } finally {
+            process.env.NODE_ENV = originalNodeEnv;
+        }
     });
 
     test("info, warn, error, and debug should output correctly structured JSON", () => {
