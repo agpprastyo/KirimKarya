@@ -42,7 +42,7 @@ describe("Auth Protection API Integration Tests", () => {
         const response = await app.request("/api/galleries");
         expect(response.status).toBe(401);
 
-        const body = await response.json();
+        const body = (await response.json()) as any;
         expect(body.message).toBe("Unauthorized");
     });
 

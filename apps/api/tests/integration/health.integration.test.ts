@@ -47,7 +47,7 @@ describe("Health API Integration Tests", () => {
         const response = await app.request("/api/health");
         expect(response.status).toBe(200);
 
-        const body = await response.json();
+        const body = (await response.json()) as any;
         expect(body.message).toContain("running");
         expect(body.data.services.db).toBe("READY");
         expect(body.data.services.redis).toBe("READY");

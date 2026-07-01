@@ -153,7 +153,7 @@ describe("Public Endpoints API Integration Tests", () => {
         const response = await app.request(`/api/public/galleries/${validUuid}`);
         expect(response.status).toBe(200);
 
-        const body = await response.json();
+        const body = (await response.json()) as any;
         expect(body.message).toBe("Success");
         expect(body.data.title).toBe("Client Proofing Gallery");
         expect(body.data.status).toBe("PUBLISHED");
@@ -163,7 +163,7 @@ describe("Public Endpoints API Integration Tests", () => {
         const response = await app.request(`/api/public/galleries/${validUuid}/photos`);
         expect(response.status).toBe(200);
 
-        const body = await response.json();
+        const body = (await response.json()) as any;
         expect(body.message).toBe("Success");
         expect(body.data).toBeArray();
         expect(body.data[0].id).toBe("photo-1");

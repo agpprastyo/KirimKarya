@@ -129,7 +129,7 @@ describe("Images Route Security Integration Tests", () => {
             }
         );
         expect(response.status).toBe(403);
-        const body = await response.json();
+        const body = (await response.json()) as any;
         expect(body.error).toBe("Forbidden");
     });
 
@@ -145,7 +145,7 @@ describe("Images Route Security Integration Tests", () => {
         mockGalleryResult = { isPrivate: false, status: "DRAFT" };
         const response = await app.request("/api/images/user-owner/gallery-123/thumbs/photo.jpg");
         expect(response.status).toBe(401);
-        const body = await response.json();
+        const body = (await response.json()) as any;
         expect(body.error).toBe("Unauthorized");
     });
 
