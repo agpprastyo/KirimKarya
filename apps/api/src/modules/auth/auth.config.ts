@@ -4,11 +4,11 @@ import { db, user, session, account, verification, twoFactor } from "@kirimkarya
 import { sendEmail } from "@kirimkarya/mail";
 import { twoFactor as twoFactorPlugin, admin, openAPI } from "better-auth/plugins";
 import { i18n } from "@better-auth/i18n";
-import { env } from "../../env";
+import { env } from "@kirimkarya/env";
 
 export const auth = betterAuth({
     baseURL: env.BETTER_AUTH_URL,
-    secret: env.BETTER_AUTH_SECRET,
+    secret: env.BETTER_AUTH_SECRET.split(",")[0],
     database: drizzleAdapter(db, {
         provider: "pg",
         schema: {
@@ -20,7 +20,7 @@ export const auth = betterAuth({
 
         },
     }),
-    trustedOrigins: ["http://localhost:5173"],
+    trustedOrigins: [env.WEB_URL, env.PUBLIC_WEB_URL].filter(Boolean),
     user: {
         additionalFields: {
             role: {

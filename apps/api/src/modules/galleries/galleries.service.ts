@@ -1,44 +1,24 @@
-import { db, galleries, galleryAccess, photos, feedbacks } from "@kirimkarya/db";
+import { db, galleries, photos, feedbacks, galleryRepository, photoRepository } from "@kirimkarya/db";
 import { eq, and, count, inArray } from "drizzle-orm";
 import { s3, withS3Breaker } from "@kirimkarya/storage";
 import { redis } from "@kirimkarya/redis";
+import { CreateGallerySchema, UpdateGallerySchema } from "./galleries.schema";
+import { z } from "zod";
 
 export class GalleryService {
     async listByUserId(userId: string) {
-        const list = await db
-            .select()
-            .from(galleries)
-            .where(eq(galleries.userId, userId))
-            .orderBy(galleries.createdAt);
-
-        const enhancedList = await Promise.all(list.map(async (gallery) => {
-            const selectionCount = await this.countSelectedPhotos(gallery.id);
-            return {
-                ...gallery,
-                id: gallery.id,
-                title: gallery.title,
-                status: gallery.status,
-                accessMode: gallery.accessMode,
-                selectionCount
-            };
+        const list = await galleryRepository.listByUserIdWithSelectionCount(userId);
+        return list.map(g => ({
+            ...g,
+            selectionCount: Number(g.selectionCount)
         }));
-
-        return enhancedList;
     }
 
     async getById(id: string, userId: string) {
-        const [gallery] = await db
-            .select()
-            .from(galleries)
-            .where(and(eq(galleries.id, id), eq(galleries.userId, userId)));
-
+        const gallery = await galleryRepository.findByIdAndUserId(id, userId);
         if (!gallery) return null;
 
-        const allowedEmails = await db
-            .select({ email: galleryAccess.email })
-            .from(galleryAccess)
-            .where(eq(galleryAccess.galleryId, id));
-
+        const allowedEmails = await galleryRepository.getAccessEmails(id);
         const selectionCount = await this.countSelectedPhotos(id);
 
         return {
@@ -47,12 +27,12 @@ export class GalleryService {
             title: gallery.title,
             status: gallery.status,
             accessMode: gallery.accessMode,
-            allowedEmails: allowedEmails.map((ae: { email: string }) => ae.email),
+            allowedEmails,
             selectionCount
         };
     }
 
-    async create(userId: string, data: any) {
+    async create(userId: string, data: z.infer<typeof CreateGallerySchema>) {
         let passwordHash = undefined;
         if (data.password) {
             passwordHash = await Bun.password.hash(data.password, {
@@ -61,113 +41,113 @@ export class GalleryService {
             });
         }
 
-        const [newGallery] = await db
-            .insert(galleries)
-            .values({
-                userId,
+        return await db.transaction(async (tx) => {
+            const newGallery = await galleryRepository.create(userId, {
                 title: data.title,
-                clientEmail: data.clientEmail,
-                passwordHash,
-                isPrivate: data.isPrivate ?? true,
+                clientEmail: data.clientEmail || null,
+                passwordHash: passwordHash || null,
+                isPrivate: true,
                 expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
-            })
-            .returning();
+            }, tx);
 
-        if (!newGallery) throw new Error("Failed to create gallery");
+            if (!newGallery) throw new Error("Failed to create gallery");
 
-        if (data.clientEmail) {
-            const emails = data.clientEmail
-                .split(/[,\s]+/)
-                .filter((e: string) => e.includes("@"));
+            if (data.clientEmail) {
+                const emails = data.clientEmail
+                    .split(/[,\s]+/)
+                    .filter((e: string) => e.includes("@"));
 
-            if (emails.length > 0) {
-                await db.insert(galleryAccess).values(
-                    emails.map((email: string) => ({
-                        galleryId: newGallery.id,
-                        email,
-                    }))
-                );
+                if (emails.length > 0) {
+                    await galleryRepository.addAccess(
+                        emails.map((email: string) => ({
+                            galleryId: newGallery.id,
+                            email,
+                        })),
+                        tx
+                    );
+                }
             }
-        }
 
-        return {
-            ...newGallery,
-            id: newGallery.id as string,
-            title: newGallery.title as string,
-            status: newGallery.status as "DRAFT" | "PUBLISHED" | "ARCHIVED",
-            accessMode: newGallery.accessMode as "OTP" | "PASSWORD",
-            selectionCount: 0
-        };
+            return {
+                ...newGallery,
+                id: newGallery.id as string,
+                title: newGallery.title as string,
+                status: newGallery.status as "DRAFT" | "PUBLISHED" | "ARCHIVED",
+                accessMode: newGallery.accessMode as "OTP" | "PASSWORD",
+                selectionCount: 0
+            };
+        });
     }
 
-    async update(id: string, userId: string, data: any) {
+    async update(
+        id: string,
+        userId: string,
+        data: Partial<z.infer<typeof UpdateGallerySchema>> & {
+            deliveryStatus?: "IDLE" | "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
+        }
+    ) {
         const { allowedEmails, password, ...updateData } = data;
 
+        let passwordHash = undefined;
         if (password) {
-            updateData.passwordHash = await Bun.password.hash(password, {
+            passwordHash = await Bun.password.hash(password, {
                 algorithm: "bcrypt",
                 cost: 10,
             });
         }
 
-        if (updateData.expiresAt) {
-            updateData.expiresAt = new Date(updateData.expiresAt);
-        }
+        const expiresAtParsed = updateData.expiresAt ? new Date(updateData.expiresAt) : undefined;
 
-        const [updatedGallery] = await db
-            .update(galleries)
-            .set({
+        await db.transaction(async (tx) => {
+            const updatedGallery = await galleryRepository.update(id, userId, {
                 ...updateData,
-                updatedAt: new Date(),
-            })
-            .where(and(eq(galleries.id, id), eq(galleries.userId, userId)))
-            .returning();
+                passwordHash: passwordHash !== undefined ? passwordHash : undefined,
+                expiresAt: expiresAtParsed !== undefined ? expiresAtParsed : undefined,
+            } as any, tx);
 
-        if (updatedGallery) {
-            const emailsFromClientAttr = updatedGallery.clientEmail
-                ? updatedGallery.clientEmail.split(/[,\s]+/).filter((e: string) => e.includes("@"))
-                : [];
+            if (updatedGallery) {
+                const emailsFromClientAttr = updatedGallery.clientEmail
+                    ? updatedGallery.clientEmail.split(/[,\s]+/).filter((e: string) => e.includes("@"))
+                    : [];
 
-            const combinedEmails = Array.from(new Set([
-                ...emailsFromClientAttr,
-                ...(allowedEmails || [])
-            ]));
+                const combinedEmails = Array.from(new Set([
+                    ...emailsFromClientAttr,
+                    ...(allowedEmails || [])
+                ]));
 
-            await db.delete(galleryAccess).where(eq(galleryAccess.galleryId, id));
-            if (combinedEmails.length > 0) {
-                await db.insert(galleryAccess).values(
-                    combinedEmails.map((email: string) => ({
-                        galleryId: id,
-                        email,
-                    }))
-                );
+                await galleryRepository.clearAccess(id, tx);
+                if (combinedEmails.length > 0) {
+                    await galleryRepository.addAccess(
+                        combinedEmails.map((email: string) => ({
+                            galleryId: id,
+                            email,
+                        })),
+                        tx
+                    );
+                }
             }
-            await redis.del(`cache:gallery:${id}:metadata`);
-        }
+        });
 
-        return updatedGallery ? this.getById(id, userId) : null;
+        await redis.del(`cache:gallery:${id}:metadata`);
+        await redis.del(`cache:gallery:${id}:photos`);
+
+        return this.getById(id, userId);
     }
 
     async delete(id: string, userId: string) {
         // 1. Get all photos belonging to the gallery to drop S3 assets asynchronously later
-        const targetPhotos = await db
-            .select()
-            .from(photos)
-            .where(eq(photos.galleryId, id));
+        const targetPhotos = await photoRepository.listByGalleryId(id);
 
-        // 2. Cascade delete records in DB synchronously (in relational dependency order)
-        const photoIds = targetPhotos.map((p) => p.id);
-        if (photoIds.length > 0) {
-            await db.delete(feedbacks).where(inArray(feedbacks.photoId, photoIds));
-            await db.delete(photos).where(inArray(photos.id, photoIds));
-        }
-
-        await db.delete(galleryAccess).where(eq(galleryAccess.galleryId, id));
-
-        const [deletedGallery] = await db
-            .delete(galleries)
-            .where(and(eq(galleries.id, id), eq(galleries.userId, userId)))
-            .returning();
+        // 2. Cascade delete records in DB synchronously wrapped in transaction
+        const deletedGallery = await db.transaction(async (tx) => {
+            const photoIds = targetPhotos.map((p) => p.id);
+            if (photoIds.length > 0) {
+                await tx.delete(feedbacks).where(inArray(feedbacks.photoId, photoIds));
+                await tx.delete(photos).where(inArray(photos.id, photoIds));
+            }
+            await galleryRepository.clearAccess(id, tx);
+            return await galleryRepository.delete(id, userId, tx);
+        });
 
         // 3. Fire S3 deletion in the background asynchronously (non-blocking)
         if (targetPhotos.length > 0) {
@@ -184,6 +164,7 @@ export class GalleryService {
             });
         }
         await redis.del(`cache:gallery:${id}:metadata`);
+        await redis.del(`cache:gallery:${id}:photos`);
 
         return deletedGallery;
     }
@@ -203,3 +184,5 @@ export class GalleryService {
 }
 
 export const galleryService = new GalleryService();
+
+

@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { apiResponse, createApiResponseSchema } from "../../lib/response";
-import { statsService } from "./stats-service";
+import { StatsSummaryResponseSchema, StatsInsightsResponseSchema, StatsClientsResponseSchema } from "./stats.schema";
+import { statsService } from "./stats.service";
 import { notificationQueue } from "@kirimkarya/queue";
 import type { HonoEnv } from "../../core/types/hono";
 
@@ -13,7 +14,7 @@ const getStatsSummaryRoute = createRoute({
     tags: ["Stats"],
     responses: {
         200: {
-            content: { "application/json": { schema: createApiResponseSchema(z.any()) } },
+            content: { "application/json": { schema: createApiResponseSchema(StatsSummaryResponseSchema) } },
             description: "Statistics summary",
         },
     },
@@ -26,7 +27,7 @@ const getStatsInsightsRoute = createRoute({
     tags: ["Stats"],
     responses: {
         200: {
-            content: { "application/json": { schema: createApiResponseSchema(z.any()) } },
+            content: { "application/json": { schema: createApiResponseSchema(StatsInsightsResponseSchema) } },
             description: "Analytics insights",
         },
     },
@@ -39,7 +40,7 @@ const getAllClientsRoute = createRoute({
     tags: ["Stats"],
     responses: {
         200: {
-            content: { "application/json": { schema: createApiResponseSchema(z.any()) } },
+            content: { "application/json": { schema: createApiResponseSchema(StatsClientsResponseSchema) } },
             description: "All clients data",
         },
     },

@@ -1,4 +1,5 @@
-import { db, galleries, photos, feedbacks, galleryAccess, eq, sql, desc, and, gte } from "@kirimkarya/db";
+import { db, galleries, photos, feedbacks, galleryAccess } from "@kirimkarya/db";
+import { eq, sql, desc, and, gte } from "drizzle-orm";
 
 export class StatsService {
     async getSummary(userId: string) {
