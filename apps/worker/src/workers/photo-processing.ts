@@ -1,7 +1,8 @@
 import { Worker } from "bullmq";
 import { redis } from "@kirimkarya/redis";
-import { db, photos, eq, count, ne, user } from "@kirimkarya/db";
-import { s3 } from "@kirimkarya/storage";
+import { db, photos, user } from "@kirimkarya/db";
+import { eq, count, inArray } from "drizzle-orm";
+import { s3, withS3Breaker } from "@kirimkarya/storage";
 import {
     PHOTO_PROCESSING_QUEUE,
     type PhotoProcessingJobData,
@@ -20,10 +21,10 @@ export const photoProcessingWorker = new Worker<PhotoProcessingJobData>(
 
         try {
             const originalFile = s3.file(originalS3Key);
-            const exists = await originalFile.exists();
+            const exists = await withS3Breaker(() => originalFile.exists());
             if (!exists) throw new Error("Original file not found in S3");
 
-            const bytes = await originalFile.bytes();
+            const bytes = await withS3Breaker(() => originalFile.bytes());
             const buffer = Buffer.from(bytes);
 
             const thumbnailBuffer = await sharp(buffer)
@@ -31,9 +32,11 @@ export const photoProcessingWorker = new Worker<PhotoProcessingJobData>(
                 .toBuffer();
 
             const thumbnailKey = `${userId}/${galleryId}/thumbs/${photoId}.webp`;
-            await s3.file(thumbnailKey).write(thumbnailBuffer, {
-                type: "image/webp",
-            });
+            await withS3Breaker(() =>
+                s3.file(thumbnailKey).write(thumbnailBuffer, {
+                    type: "image/webp",
+                })
+            );
 
             const resizedBuffer = await sharp(buffer)
                 .resize(1200, 1200, { fit: "inside", withoutEnlargement: true })
@@ -63,8 +66,8 @@ export const photoProcessingWorker = new Worker<PhotoProcessingJobData>(
             if (userData?.watermarkType === "IMAGE" && userData?.watermarkImageKey) {
                 try {
                     const logoFile = s3.file(userData.watermarkImageKey);
-                    if (await logoFile.exists()) {
-                        const logoBytes = await logoFile.bytes();
+                    if (await withS3Breaker(() => logoFile.exists())) {
+                        const logoBytes = await withS3Breaker(() => logoFile.bytes());
                         const base64Png = Buffer.from(logoBytes).toString("base64");
 
                         // Beautiful repeating Shutterstock-style PNG logo grid pattern rotated -30deg
@@ -109,9 +112,11 @@ export const photoProcessingWorker = new Worker<PhotoProcessingJobData>(
                 .toBuffer();
 
             const watermarkKey = `${userId}/${galleryId}/previews/${photoId}.webp`;
-            await s3.file(watermarkKey).write(watermarkBuffer, {
-                type: "image/webp",
-            });
+            await withS3Breaker(() =>
+                s3.file(watermarkKey).write(watermarkBuffer, {
+                    type: "image/webp",
+                })
+            );
 
             await db.update(photos).set({
                 thumbnailS3Key: thumbnailKey,
@@ -119,17 +124,20 @@ export const photoProcessingWorker = new Worker<PhotoProcessingJobData>(
                 status: "READY",
             }).where(eq(photos.id, photoId));
 
+            await redis.del(`cache:gallery:${galleryId}:photos`).catch(() => {});
+
+            // Only count photos still in an active state (PENDING or PROCESSING)
+            // Exclude ERROR status to avoid false "all ready" notifications
             const [counts] = await db
-                .select({
-                    total: count(),
-                    pending: count(ne(photos.status, "READY")),
-                })
+                .select({ pending: count() })
                 .from(photos)
-                .where(eq(photos.galleryId, galleryId));
+                .where(
+                    inArray(photos.status, ["PENDING", "PROCESSING"])
+                );
 
             if (counts && counts.pending === 0) {
                 console.log(`[Job ${job.id}] All photos in gallery ${galleryId} are READY. Queueing notification.`);
-                await notificationQueue.add(`photos_ready_${galleryId}`, {
+                await notificationQueue.add("PHOTOS_READY", {
                     type: "PHOTOS_READY",
                     galleryId,
                     userId,
@@ -146,8 +154,14 @@ export const photoProcessingWorker = new Worker<PhotoProcessingJobData>(
     {
         connection: redis as any,
         concurrency: 4,
+        stalledInterval: 15000,
+        maxStalledCount: 2,
     }
 );
+
+photoProcessingWorker.on("stalled", (jobId, prev) => {
+    console.warn(`[Photo Worker] Job ${jobId} has stalled! Previous state: ${prev}`);
+});
 
 photoProcessingWorker.on("completed", (job) => {
     console.log(`[Job ${job.id}] Completed successfully.`);

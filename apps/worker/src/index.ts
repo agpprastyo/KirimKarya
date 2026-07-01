@@ -3,7 +3,7 @@ import { photoProcessingWorker } from "./workers/photo-processing";
 import { notificationWorker } from "./workers/notification";
 import { cleanupWorker } from "./workers/cleanup";
 import { deliveryWorker } from "./workers/delivery";
-import { env } from "./env";
+import { env } from "@kirimkarya/env";
 
 console.log("🚀 Kirim Karya Worker is starting...");
 
@@ -19,10 +19,56 @@ console.log(`✅ Started ${workers.length} worker queues.`);
     console.log("⏰ Cleanup job scheduled (hourly)");
 })();
 
-Bun.serve({
+const server = Bun.serve({
     port: env.WORKER_PORT,
     fetch(req) {
         if (new URL(req.url).pathname === "/health") return new Response("OK");
         return new Response("Kirim Karya Worker is processing...");
     },
 });
+
+const shutdown = async (signal: string) => {
+    console.log(`\n[Worker] Received ${signal}. Starting graceful shutdown...`);
+    
+    // Set a safety fallback exit timeout of 10 seconds
+    const timeout = setTimeout(() => {
+        console.error("[Worker] Graceful shutdown timed out. Forcing exit.");
+        process.exit(1);
+    }, 10000);
+
+    try {
+        console.log("[Worker] Stopping HTTP health listener...");
+        server.stop(true);
+        console.log("[Worker] HTTP health listener stopped.");
+    } catch (err: any) {
+        console.error("[Worker] Failed to stop HTTP health listener:", err.message);
+    }
+    
+    await Promise.all(
+        workers.map(async (worker) => {
+            console.log(`[Worker] Closing worker: ${worker.name}...`);
+            try {
+                await worker.close();
+                console.log(`[Worker] Closed worker: ${worker.name}`);
+            } catch (err: any) {
+                console.error(`[Worker] Failed to close worker ${worker.name}:`, err.message);
+            }
+        })
+    );
+
+    try {
+        const { pgClient } = await import("@kirimkarya/db");
+        console.log("[Worker] Closing database connection pool...");
+        await pgClient.end();
+        console.log("[Worker] Database connection pool closed gracefully.");
+    } catch (err: any) {
+        console.error("[Worker] Failed to close database connection pool:", err.message);
+    }
+    
+    clearTimeout(timeout);
+    console.log("[Worker] All workers and pools closed gracefully. Exiting process.");
+    process.exit(0);
+};
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

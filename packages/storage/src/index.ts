@@ -1,5 +1,5 @@
 import { S3Client } from "bun";
-import { env } from "./env";
+import { env } from "@kirimkarya/env";
 export { env };
 import CircuitBreaker from "opossum";
 

@@ -1,12 +1,13 @@
 import { Worker } from "bullmq";
 import { redis } from "@kirimkarya/redis";
-import { db, galleries, user, galleryAccess, eq } from "@kirimkarya/db";
+import { db, galleries, user, galleryAccess } from "@kirimkarya/db";
+import { eq } from "drizzle-orm";
 import {
     NOTIFICATION_QUEUE,
     type NotificationJobData,
 } from "@kirimkarya/queue";
 import { sendGalleryPublishedEmail, sendPhotosReadyEmail, sendSelectionSubmittedEmail, sendReminderEmail } from "@kirimkarya/mail";
-import { env } from "../env";
+import { env } from "@kirimkarya/env";
 
 export const notificationWorker = new Worker<NotificationJobData>(
     NOTIFICATION_QUEUE,
@@ -52,8 +53,14 @@ export const notificationWorker = new Worker<NotificationJobData>(
     {
         connection: redis as any,
         concurrency: 5,
+        stalledInterval: 15000,
+        maxStalledCount: 2,
     }
 );
+
+notificationWorker.on("stalled", (jobId, prev) => {
+    console.warn(`[Notification Worker] Job ${jobId} has stalled! Previous state: ${prev}`);
+});
 
 notificationWorker.on("completed", (job) => {
     console.log(`[Notification ${job.id}] Completed successfully.`);

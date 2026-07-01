@@ -23,7 +23,7 @@ async function testNotifications() {
         type: "CLIENT_SELECTION_SUBMITTED",
         galleryId,
         userId,
-        data: { selectionCount: 5 },
+        data: { selectionCount: 5, clientEmail: "test-client@example.com" },
     });
 
     console.log("Jobs added! Check worker logs.");

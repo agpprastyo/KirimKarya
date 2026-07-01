@@ -1,7 +1,8 @@
 import { Worker } from "bullmq";
 import { redis } from "@kirimkarya/redis";
-import { db, galleries, photos, feedbacks, eq, lt, inArray } from "@kirimkarya/db";
-import { s3 } from "@kirimkarya/storage";
+import { db, galleries, photos, feedbacks } from "@kirimkarya/db";
+import { eq, lt, inArray } from "drizzle-orm";
+import { s3, withS3Breaker } from "@kirimkarya/storage";
 import {
     CLEANUP_QUEUE,
     type CleanupJobData,
@@ -37,9 +38,9 @@ export const cleanupWorker = new Worker<CleanupJobData>(
                         for (const key of keysToDelete) {
                             try {
                                 const fileRef = s3.file(key);
-                                const exists = await fileRef.exists();
+                                const exists = await withS3Breaker(() => fileRef.exists());
                                 if (exists) {
-                                    await fileRef.delete();
+                                    await withS3Breaker(() => fileRef.delete());
                                 }
                             } catch (e) {
                                 console.error(`[Cleanup ${job.id}] Failed to delete S3 object ${key}:`, e);
@@ -53,6 +54,8 @@ export const cleanupWorker = new Worker<CleanupJobData>(
                 }
 
                 await db.delete(galleries).where(eq(galleries.id, gallery.id));
+                await redis.del(`cache:gallery:${gallery.id}:metadata`).catch(() => {});
+                await redis.del(`cache:gallery:${gallery.id}:photos`).catch(() => {});
                 console.log(`[Cleanup ${job.id}] Successfully deleted gallery ${gallery.id}`);
             } catch (error) {
                 console.error(`[Cleanup ${job.id}] Failed to cleanup gallery ${gallery.id}:`, error);
@@ -74,12 +77,14 @@ export const cleanupWorker = new Worker<CleanupJobData>(
                 console.log(`[Cleanup ${job.id}] Cleaning up expired ZIP for gallery ${gallery.id}`);
                 try {
                     const fileRef = s3.file(gallery.deliveryZipKey);
-                    if (await fileRef.exists()) {
-                        await fileRef.delete();
+                    if (await withS3Breaker(() => fileRef.exists())) {
+                        await withS3Breaker(() => fileRef.delete());
                     }
                     await db.update(galleries)
                         .set({ deliveryZipKey: null })
                         .where(eq(galleries.id, gallery.id));
+                    await redis.del(`cache:gallery:${gallery.id}:metadata`).catch(() => {});
+                    await redis.del(`cache:gallery:${gallery.id}:photos`).catch(() => {});
                 } catch (e) {
                     console.error(`[Cleanup ${job.id}] Failed to cleanup ZIP for gallery ${gallery.id}:`, e);
                 }
@@ -89,8 +94,14 @@ export const cleanupWorker = new Worker<CleanupJobData>(
     {
         connection: redis as any,
         concurrency: 1,
+        stalledInterval: 15000,
+        maxStalledCount: 2,
     }
 );
+
+cleanupWorker.on("stalled", (jobId, prev) => {
+    console.warn(`[Cleanup Worker] Job ${jobId} has stalled! Previous state: ${prev}`);
+});
 
 cleanupWorker.on("completed", (job) => {
     console.log(`[Cleanup ${job.id}] Completed`);
@@ -99,3 +110,4 @@ cleanupWorker.on("completed", (job) => {
 cleanupWorker.on("failed", (job, err) => {
     console.error(`[Cleanup ${job?.id}] Failed with error: ${err.message}`);
 });
+
