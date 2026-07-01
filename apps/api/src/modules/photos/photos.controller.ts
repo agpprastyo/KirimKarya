@@ -88,29 +88,34 @@ const routes = photosRoutes
             return c.json(apiResponse.success({ deletedCount: 0 }), 200);
         }
 
-        for (const p of list) {
-            try {
-                if (p.originalS3Key) {
-                    await withS3Breaker(() => s3.file(p.originalS3Key).delete()).catch(() => {});
-                }
-                if (p.thumbnailS3Key) {
-                    const key = p.thumbnailS3Key;
-                    await withS3Breaker(() => s3.file(key).delete()).catch(() => {});
-                }
-                if (p.watermarkS3Key) {
-                    const key = p.watermarkS3Key;
-                    await withS3Breaker(() => s3.file(key).delete()).catch(() => {});
-                }
-            } catch (err) {
-                console.error("Failed to delete S3 files for photo", p.id, err);
-            }
-        }
-
         const targetIds = list.map(p => p.id);
         
         await db.transaction(async (tx) => {
             await tx.delete(feedbacks).where(inArray(feedbacks.photoId, targetIds));
             await tx.delete(photos).where(inArray(photos.id, targetIds));
+        });
+
+        // Trigger S3 deletions asynchronously after database transaction resolves successfully
+        (async () => {
+            for (const p of list) {
+                try {
+                    if (p.originalS3Key) {
+                        await withS3Breaker(() => s3.file(p.originalS3Key).delete()).catch(() => {});
+                    }
+                    if (p.thumbnailS3Key) {
+                        const key = p.thumbnailS3Key;
+                        await withS3Breaker(() => s3.file(key).delete()).catch(() => {});
+                    }
+                    if (p.watermarkS3Key) {
+                        const key = p.watermarkS3Key;
+                        await withS3Breaker(() => s3.file(key).delete()).catch(() => {});
+                    }
+                } catch (err) {
+                    console.error("Failed to delete S3 files for photo", p.id, err);
+                }
+            }
+        })().catch(err => {
+            console.error("Asynchronous S3 bulk-deletion failed", err);
         });
 
         return c.json(apiResponse.success({ deletedCount: targetIds.length }), 200);

@@ -586,9 +586,9 @@ const routes = publicRoutes
                 return c.json(apiResponse.error("ZIP file not found in storage"), 404);
             }
 
-            const buffer = await fileRef.arrayBuffer();
+            const stream = fileRef.stream();
 
-            return c.body(buffer as any, 200, {
+            return c.body(stream as any, 200, {
                 "Content-Type": "application/zip",
                 "Content-Disposition": `attachment; filename="${gallery.title.replace(/[^a-z0-9]/gi, '_')}.zip"`,
             });
