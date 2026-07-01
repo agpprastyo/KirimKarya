@@ -1,4 +1,5 @@
 export * from "./schema";
 export * from "./db";
-export { eq, and, or, sql, count, ne, lt, gte, inArray, desc } from "drizzle-orm";
+export * from "./repositories/gallery.repository";
+export * from "./repositories/photo.repository";
 

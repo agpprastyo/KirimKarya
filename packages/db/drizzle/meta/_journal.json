@@ -50,6 +50,13 @@
       "when": 1779517647982,
       "tag": "0006_parched_shiva",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1748506800000,
+      "tag": "0007_db_review_indexes_cascades",
+      "breakpoints": true
     }
   ]
 }

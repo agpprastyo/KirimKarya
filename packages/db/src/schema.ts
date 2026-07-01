@@ -1,11 +1,11 @@
-import { pgTable, text, timestamp, boolean, varchar, uuid, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, varchar, uuid, integer, index, uniqueIndex, bigint } from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
 export * from "./auth-schema";
 import { user } from "./auth-schema";
 
 export const galleries = pgTable("galleries", {
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
-    userId: text("user_id").notNull().references(() => user.id),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     title: varchar("title", { length: 255 }).notNull(),
     clientEmail: varchar("client_email", { length: 255 }),
     passwordHash: varchar("password_hash", { length: 255 }),
@@ -21,32 +21,45 @@ export const galleries = pgTable("galleries", {
     pricePerExtraPhoto: integer("price_per_extra_photo").default(0).notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
-});
+}, (table) => [
+    index("idx_galleries_user_id").on(table.userId),
+    index("idx_galleries_expires_at").on(table.expiresAt),
+]);
 
 export const galleryAccess = pgTable("gallery_access", {
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     galleryId: uuid("gallery_id").notNull().references(() => galleries.id, { onDelete: "cascade" }),
     email: varchar("email", { length: 255 }).notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-});
+}, (table) => [
+    index("idx_gallery_access_gallery_email").on(table.galleryId, table.email),
+]);
 
 export const photos = pgTable("photos", {
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
-    galleryId: uuid("gallery_id").notNull().references(() => galleries.id),
+    galleryId: uuid("gallery_id").notNull().references(() => galleries.id, { onDelete: "cascade" }),
     filename: varchar("filename", { length: 255 }).notNull(),
     originalS3Key: varchar("original_s3_key", { length: 1024 }).notNull(),
     thumbnailS3Key: varchar("thumbnail_s3_key", { length: 1024 }),
     watermarkS3Key: varchar("watermark_s3_key", { length: 1024 }),
+    fileSize: bigint("file_size", { mode: "number" }),
     status: varchar("status", { length: 50 }).default('PENDING').notNull(),
     uploadedAt: timestamp("uploaded_at", { mode: "date" }).defaultNow().notNull(),
-});
+}, (table) => [
+    index("idx_photos_gallery_id").on(table.galleryId),
+]);
 
 export const feedbacks = pgTable("feedbacks", {
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
-    photoId: uuid("photo_id").notNull().references(() => photos.id),
+    photoId: uuid("photo_id").notNull().references(() => photos.id, { onDelete: "cascade" }),
     isSelected: boolean("is_selected").default(false).notNull(),
     comment: text("comment"),
     clientIdentifier: varchar("client_identifier", { length: 255 }),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
-});
+}, (table) => [
+    index("idx_feedbacks_photo_id").on(table.photoId),
+    index("idx_feedbacks_client_identifier").on(table.clientIdentifier),
+    uniqueIndex("idx_feedbacks_photo_client_uniq").on(table.photoId, table.clientIdentifier),
+]);
+
