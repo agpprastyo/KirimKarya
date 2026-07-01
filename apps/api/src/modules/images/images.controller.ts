@@ -6,6 +6,7 @@ import { ApiErrorSchema } from "../../lib/response";
 import { db, galleries } from "@kirimkarya/db";
 import { eq } from "drizzle-orm";
 import { publicService } from "../public/public.service";
+import { redis } from "@kirimkarya/redis";
 
 const imagesRoutes = new OpenAPIHono();
 
@@ -58,53 +59,51 @@ const routes = imagesRoutes.openapi(getImageRoute, async (c) => {
 
     if (!isPublicPath) {
         let authUser = user;
-
         if (!authUser) {
-            const session = await auth.api.getSession({
-                headers: c.req.raw.headers,
-            });
-            authUser = session?.user;
+            try {
+                const session = await auth.api.getSession({
+                    headers: c.req.raw.headers,
+                });
+                authUser = session?.user;
+            } catch {}
         }
 
-        if (!authUser) {
+        // 1. Owner check: If logged-in user owns the resource, allow access
+        const isOwner = authUser ? key.startsWith(`${authUser.id}/`) : false;
+
+        if (!isOwner) {
+            // 2. Guest check: Check if guest access is allowed
+            let isGuestAllowed = false;
             const parts = key.split("/");
             if (parts.length >= 3) {
                 const galleryId = parts[1]!;
-                const fileType = parts[2]!; // "thumbs" | "watermarks" | "original"
+                const fileType = parts[2]!; // "thumbs" | "watermarks" | "previews"
 
-                // Guests (public or private) should ONLY access thumbs, previews, and watermarks
                 if (fileType === "thumbs" || fileType === "previews" || fileType === "watermarks") {
                     const [gallery] = await db
                         .select({ isPrivate: galleries.isPrivate, status: galleries.status })
                         .from(galleries)
                         .where(eq(galleries.id, galleryId));
 
-                    if (gallery) {
-                        const isPublicAndPublished = !gallery.isPrivate && gallery.status === "PUBLISHED";
+                    if (gallery && gallery.status === "PUBLISHED") {
                         const accessCookie = getCookie(c, `gallery_access_${galleryId}`);
-                        // Resolve the token to an email via Redis
-                        const resolvedEmail = accessCookie ? await publicService.resolveClientEmail(galleryId, accessCookie) : null;
-                        const hasAccessCookie = !!resolvedEmail;
+                        const hasAccessCookie = accessCookie ? !!(await redis.get(`access_token:${galleryId}:${accessCookie}`)) : false;
 
-                        if (isPublicAndPublished || hasAccessCookie) {
-                            const { stream, contentType } = await imagesService.getImageStream(key);
-                            return c.body(stream as any, 200, {
-                                "Content-Type": contentType,
-                                "Cache-Control": "public, max-age=31536000, immutable",
-                            });
+                        if (!gallery.isPrivate || hasAccessCookie) {
+                            isGuestAllowed = true;
                         }
                     }
                 }
             }
-        }
 
-        if (!authUser) {
-            return c.json({ error: "Unauthorized" }, 401);
-        }
-
-        if (!key.startsWith(`${authUser.id}/`)) {
-            console.warn(`[Security] Unauthorized access attempt to key: ${key} by user: ${authUser.id}`);
-            return c.json({ error: "Forbidden" }, 403);
+            if (!isGuestAllowed) {
+                if (authUser) {
+                    console.warn(`[Security] Forbidden access attempt to key: ${key} by user: ${authUser.id}`);
+                    return c.json({ error: "Forbidden" }, 403);
+                } else {
+                    return c.json({ error: "Unauthorized" }, 401);
+                }
+            }
         }
     }
 
