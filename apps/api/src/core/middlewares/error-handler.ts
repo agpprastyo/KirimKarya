@@ -2,7 +2,6 @@ import type { Context } from "hono";
 import { z, ZodError } from "zod";
 import { HttpError } from "../exceptions/http-error";
 import { apiResponse } from "../../lib/response";
-import { env } from "@kirimkarya/env";
 
 export const errorHandler = (err: Error, c: Context) => {
 
@@ -22,7 +21,7 @@ export const errorHandler = (err: Error, c: Context) => {
     return c.json(
         apiResponse.error(
             "An unexpected error occurred",
-            env.NODE_ENV === "development" ? err.message : null
+            process.env.NODE_ENV === "development" ? err.message : null
         ),
         500
     );

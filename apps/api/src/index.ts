@@ -115,7 +115,7 @@ const routes = app
 
 export type AppType = typeof routes;
 
-let server: any;
+let server: ReturnType<typeof Bun.serve> | undefined;
 if (process.env.NODE_ENV !== "test") {
     server = Bun.serve({
         port: env.PORT,
@@ -135,7 +135,7 @@ if (process.env.NODE_ENV !== "test") {
         
         try {
             console.log("[API] Stopping HTTP server...");
-            server.stop(true);
+            server?.stop(true);
             console.log("[API] HTTP server stopped accepting new requests.");
         } catch (err: unknown) {
             console.error("[API] Failed to stop HTTP server:", err instanceof Error ? err.message : String(err));
