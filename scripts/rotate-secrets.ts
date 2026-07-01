@@ -35,10 +35,12 @@ async function rotateSecrets() {
         let currentSecretValue = "";
 
         for (let i = 0; i < lines.length; i++) {
-            const match = lines[i].match(/^BETTER_AUTH_SECRET=(.*)$/);
+            const line = lines[i];
+            if (!line) continue;
+            const match = line.match(/^BETTER_AUTH_SECRET=(.*)$/);
             if (match) {
                 currentSecretLineIdx = i;
-                currentSecretValue = match[1].trim();
+                currentSecretValue = (match[1] || "").trim();
                 break;
             }
         }
