@@ -33,7 +33,7 @@
 
     const photosQuery = createQuery(() => ({
         queryKey: ["galleries", galleryId, "photos"],
-        queryFn: () => handleResponse(apiClient.api.photos.galleries[":id"].photos.$get({
+        queryFn: () => handleResponse(apiClient.api.galleries[":id"].photos.$get({
             param: { id: galleryId },
         })).then((res: any) => res.data)
     }));
@@ -286,7 +286,7 @@
                 const formData = new FormData();
                 formData.append("file", item.file);
 
-                const url = apiClient.api.photos.galleries[":id"].photos.$url({
+                const url = apiClient.api.galleries[":id"].photos.$url({
                     param: { id: galleryId },
                 });
 
