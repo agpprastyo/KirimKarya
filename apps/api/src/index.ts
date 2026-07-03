@@ -23,6 +23,7 @@ import statsRoutes from "./modules/stats/stats.controller";
 import watermarkRoutes from "./modules/watermark/watermark.controller";
 import adminRoutes from "./modules/admin/admin.controller";
 import { adminMiddleware } from "./core/middlewares/admin";
+import { observabilityRouter } from "./modules/observability/observability.controller";
 
 import type { HonoEnv } from "./core/types/hono";
 
@@ -95,6 +96,7 @@ app.get("/api/docs/better-auth.json", async (c) => {
 // SvelteKit Web compatibility for public pages and Dashboard UI.
 const routes = app
     .route("/api/auth", authRoutes)
+    .route("/api/observability", observabilityRouter)
     .route("/api/v1/health", healthRoutes)
     .route("/api/v1/auth", authRoutes)
     .route("/api/v1/images", imagesRoutes)
