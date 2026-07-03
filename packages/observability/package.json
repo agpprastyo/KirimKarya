@@ -1,0 +1,20 @@
+{
+  "name": "@kirimkarya/observability",
+  "version": "1.0.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@opentelemetry/api": "1.9.0",
+    "@opentelemetry/sdk-node": "0.52.0",
+    "@opentelemetry/exporter-trace-otlp-grpc": "0.52.0",
+    "@opentelemetry/sdk-trace-base": "1.25.0",
+    "@opentelemetry/resources": "1.25.0",
+    "@opentelemetry/semantic-conventions": "1.25.0",
+    "@opentelemetry/instrumentation": "0.52.0",
+    "@opentelemetry/instrumentation-http": "0.52.0",
+    "@opentelemetry/sdk-trace-web": "1.25.0",
+    "@opentelemetry/context-zone": "1.25.0",
+    "@opentelemetry/instrumentation-fetch": "0.52.0",
+    "@opentelemetry/exporter-trace-otlp-http": "0.52.0"
+  }
+}

@@ -82,7 +82,7 @@ describe("Admin Endpoints", () => {
         });
         expect(response.status).toBe(200);
 
-        const body = await response.json();
+        const body = (await response.json()) as any;
         expect(body.data.queues).toBeArray();
         expect(body.data.queues[0].active).toBe(1);
     });

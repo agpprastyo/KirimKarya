@@ -335,7 +335,7 @@ const routes = galleriesRoutes
                     let newPhoto: typeof photos.$inferSelect | null = null;
                     try {
                         const [inserted] = await db.insert(photos).values({ galleryId, filename, originalS3Key, status: "PENDING" }).returning();
-                        newPhoto = inserted;
+                        newPhoto = inserted || null;
                     } catch (dbErr: unknown) { reject(new Error("Failed to create photo record")); fileStream.resume(); return; }
                     if (!newPhoto) { reject(new Error("Failed to create photo record")); fileStream.resume(); return; }
                     fileStream.on("limit", async () => {

@@ -19,7 +19,7 @@ export const rateLimiterMiddleware = () => {
         // 1. Resolve client IP address
         const ip =
             c.req.header("cf-connecting-ip") ||
-            c.req.header("x-forwarded-for")?.split(",")[0].trim() ||
+            (c.req.header("x-forwarded-for") || "").split(",")[0]?.trim() ||
             c.req.header("x-real-ip") ||
             "127.0.0.1";
 

@@ -1,4 +1,3 @@
-import { Worker } from "bullmq";
 import { redis } from "@kirimkarya/redis";
 import { db, galleries, photos, feedbacks, galleryAccess } from "@kirimkarya/db";
 import { eq, and } from "drizzle-orm";
@@ -6,6 +5,7 @@ import { s3, env as storageEnv, withS3Breaker } from "@kirimkarya/storage";
 import {
     DELIVERY_QUEUE,
     type NotificationJobData,
+    Worker,
 } from "@kirimkarya/queue";
 import { sendGalleryDeliveredEmail } from "@kirimkarya/mail";
 import { env } from "@kirimkarya/env";
@@ -15,7 +15,7 @@ import { S3Client as AwsS3Client } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 
 const require = createRequire(import.meta.url);
-const archiver = require("archiver") as typeof import("archiver").default;
+const archiver = require("archiver") as any;
 
 
 export const deliveryWorker = new Worker<NotificationJobData>(

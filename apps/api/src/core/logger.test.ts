@@ -53,7 +53,7 @@ describe("Core Logger", () => {
             
             logger.info("Info message", context);
             expect(logSpy).toHaveBeenCalledTimes(1);
-            const infoLog = JSON.parse(logSpy.mock.calls[0][0] as string);
+            const infoLog = JSON.parse((logSpy.mock.calls[0]?.[0] ?? "{}") as string);
             expect(infoLog.level).toBe("info");
             expect(infoLog.message).toBe("Info message");
             expect(infoLog.requestId).toBe("req-123");
@@ -63,7 +63,7 @@ describe("Core Logger", () => {
 
             logger.warn("Warn message", context, new Error("Warn error"));
             expect(warnSpy).toHaveBeenCalledTimes(1);
-            const warnLog = JSON.parse(warnSpy.mock.calls[0][0] as string);
+            const warnLog = JSON.parse((warnSpy.mock.calls[0]?.[0] ?? "{}") as string);
             expect(warnLog.level).toBe("warn");
             expect(warnLog.message).toBe("Warn message");
             expect(warnLog.error).toBeDefined();
@@ -71,7 +71,7 @@ describe("Core Logger", () => {
 
             logger.error("Error message", context, "String error");
             expect(errorSpy).toHaveBeenCalledTimes(1);
-            const errorLog = JSON.parse(errorSpy.mock.calls[0][0] as string);
+            const errorLog = JSON.parse((errorSpy.mock.calls[0]?.[0] ?? "{}") as string);
             expect(errorLog.level).toBe("error");
             expect(errorLog.message).toBe("Error message");
             expect(errorLog.error).toBeDefined();
@@ -80,7 +80,7 @@ describe("Core Logger", () => {
             logger.debug("Debug message", context);
             // debug prints to console.log as well
             expect(logSpy).toHaveBeenCalledTimes(2);
-            const debugLog = JSON.parse(logSpy.mock.calls[1][0] as string);
+            const debugLog = JSON.parse((logSpy.mock.calls[1]?.[0] ?? "{}") as string);
             expect(debugLog.level).toBe("debug");
             expect(debugLog.message).toBe("Debug message");
         } finally {
