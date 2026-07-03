@@ -3,7 +3,6 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
 import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { Resource } from '@opentelemetry/resources';
 import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
-import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 
 export function initNodeTracing(serviceName: string, collectorEndpoint: string) {
     const sdk = new NodeSDK({
@@ -12,9 +11,7 @@ export function initNodeTracing(serviceName: string, collectorEndpoint: string) 
         }),
         traceExporter: new OTLPTraceExporter({ url: collectorEndpoint }),
         spanProcessor: new SimpleSpanProcessor(new OTLPTraceExporter({ url: collectorEndpoint })),
-        instrumentations: [
-            new HttpInstrumentation(),
-        ],
+        instrumentations: [],
     });
 
     sdk.start();

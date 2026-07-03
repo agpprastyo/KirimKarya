@@ -24,6 +24,7 @@ import watermarkRoutes from "./modules/watermark/watermark.controller";
 import adminRoutes from "./modules/admin/admin.controller";
 import { adminMiddleware } from "./core/middlewares/admin";
 import { observabilityRouter } from "./modules/observability/observability.controller";
+import { tracingMiddleware } from "./core/middlewares/tracing";
 
 import type { HonoEnv } from "./core/types/hono";
 
@@ -31,6 +32,7 @@ export const app = new OpenAPIHono<HonoEnv>();
 
 // Global Middlewares
 app.use("*", requestId());
+app.use("*", tracingMiddleware());
 app.use("*", loggerMiddleware());
 app.use(
     "/*",
