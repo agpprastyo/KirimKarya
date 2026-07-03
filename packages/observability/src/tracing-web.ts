@@ -8,7 +8,7 @@ import { Resource } from '@opentelemetry/resources';
 import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
 
 export function initWebTracing(serviceName: string, traceEndpoint: string) {
-    if (typeof window === 'undefined') return;
+    if (typeof globalThis === 'undefined' || !('window' in globalThis)) return;
 
     const provider = new WebTracerProvider({
         resource: new Resource({
