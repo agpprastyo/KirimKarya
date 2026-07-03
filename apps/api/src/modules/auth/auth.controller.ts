@@ -108,7 +108,8 @@ const routes = authRoutes.openapi(uploadAvatarRoute, async (c) => {
                     reject(new Error("No file uploaded"));
                 }
             });
-            const nodeReqStream = Readable.fromWeb(c.req.raw.body as any);
+            const clonedReq = c.req.raw.clone();
+            const nodeReqStream = Readable.fromWeb(clonedReq.body as any);
             nodeReqStream.pipe(busboy);
         });
     } catch (err: unknown) {
