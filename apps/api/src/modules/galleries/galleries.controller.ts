@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { apiResponse, createApiResponseSchema, ApiErrorSchema } from "../../lib/response";
+import { apiResponse, createApiResponseSchema, ApiErrorSchema, zUuId } from "../../lib/response";
 import { CreateGallerySchema, UpdateGallerySchema, GalleryResponseSchema } from "./galleries.schema";
 import { galleryService } from "./galleries.service";
 import { notificationQueue, deliveryQueue } from "@kirimkarya/queue";
@@ -77,7 +77,7 @@ const uploadPhotoRoute = createRoute({
     tags: ["Photos"],
     request: {
         params: z.object({
-            id: z.string().uuid(),
+            id: zUuId(),
         }),
         body: {
             content: {
@@ -94,7 +94,7 @@ const uploadPhotoRoute = createRoute({
             description: "Photo upload accepted and processing started",
             content: {
                 "application/json": {
-                    schema: createApiResponseSchema(z.object({ photoId: z.string().uuid() })),
+                    schema: createApiResponseSchema(z.object({ photoId: zUuId() })),
                 },
             },
         },
@@ -112,7 +112,7 @@ const listGalleryPhotosRoute = createRoute({
     tags: ["Photos"],
     request: {
         params: z.object({
-            id: z.string().uuid(),
+            id: zUuId(),
         }),
     },
     responses: {
@@ -120,14 +120,14 @@ const listGalleryPhotosRoute = createRoute({
             content: {
                 "application/json": {
                     schema: createApiResponseSchema(z.array(z.object({
-                        id: z.string().uuid(),
+                        id: zUuId(),
                         filename: z.string(),
                         status: z.string(),
                         thumbnailUrl: z.string().nullable(),
                         previewUrl: z.string().nullable(),
                         selectionCount: z.number(),
                         feedbacks: z.array(z.object({
-                            id: z.string().uuid(),
+                            id: zUuId(),
                             isSelected: z.boolean(),
                             comment: z.string().nullable(),
                             clientIdentifier: z.string().nullable(),
@@ -149,7 +149,7 @@ const getGalleryRoute = createRoute({
     tags: ["Galleries"],
     request: {
         params: z.object({
-            id: z.string().uuid(),
+            id: zUuId(),
         }),
     },
     responses: {
@@ -179,7 +179,7 @@ const updateGalleryRoute = createRoute({
     tags: ["Galleries"],
     request: {
         params: z.object({
-            id: z.string().uuid(),
+            id: zUuId(),
         }),
         body: {
             content: {
@@ -224,7 +224,7 @@ const deliverGalleryRoute = createRoute({
     tags: ["Galleries"],
     request: {
         params: z.object({
-            id: z.string().uuid(),
+            id: zUuId(),
         }),
     },
     responses: {
@@ -262,7 +262,7 @@ const deleteGalleryRoute = createRoute({
     tags: ["Galleries"],
     request: {
         params: z.object({
-            id: z.string().uuid(),
+            id: zUuId(),
         }),
     },
     responses: {
@@ -313,70 +313,66 @@ const routes = galleriesRoutes
         if (!gallery) return c.json(apiResponse.error("Gallery not found"), 404);
 
         const MAX_SIZE = 50 * 1024 * 1024;
-        const contentLength = c.req.header("content-length");
-        if (contentLength && parseInt(contentLength, 10) > MAX_SIZE) {
+        
+        let file: File | null = null;
+        try {
+            const formData = await c.req.formData();
+            file = formData.get("file") as File;
+        } catch (err: unknown) {
+            return c.json(apiResponse.error("Failed to parse form data"), 400);
+        }
+
+        if (!file || !(file instanceof File)) {
+            return c.json(apiResponse.error("No file uploaded"), 400);
+        }
+
+        if (file.size > MAX_SIZE) {
             return c.json(apiResponse.error("File size exceeds 50MB limit."), 400);
         }
 
-        let newPhotoId: string | null = null;
+        if (!file.type.startsWith("image/")) {
+            return c.json(apiResponse.error("Only image files are allowed."), 400);
+        }
+
+        const originalS3Key = `${user.id}/${galleryId}/original/${crypto.randomUUID()}-${file.name.replace(/\s+/g, "-")}`;
+        
+        let newPhoto: typeof photos.$inferSelect | null = null;
         try {
-            newPhotoId = await new Promise<string>((resolve, reject) => {
-                const busboy = Busboy({
-                    headers: { "content-type": c.req.header("content-type") || "" },
-                    limits: { files: 1, fileSize: MAX_SIZE },
-                });
-                let fileProcessed = false;
-                busboy.on("file", async (fieldname, fileStream, info) => {
-                    const { filename, mimeType } = info;
-                    if (fieldname !== "file") { fileStream.resume(); return; }
-                    fileProcessed = true;
-                    if (!mimeType.startsWith("image/")) { reject(new Error("Only image files are allowed.")); fileStream.resume(); return; }
-                    const originalS3Key = `${user.id}/${galleryId}/original/${crypto.randomUUID()}-${filename.replace(/\\s+/g, "-")}`;
-                    let newPhoto: typeof photos.$inferSelect | null = null;
-                    try {
-                        const [inserted] = await db.insert(photos).values({ galleryId, filename, originalS3Key, status: "PENDING" }).returning();
-                        newPhoto = inserted || null;
-                    } catch (dbErr: unknown) { reject(new Error("Failed to create photo record")); fileStream.resume(); return; }
-                    if (!newPhoto) { reject(new Error("Failed to create photo record")); fileStream.resume(); return; }
-                    fileStream.on("limit", async () => {
-                        if (newPhoto) {
-                            await db.delete(photos).where(eq(photos.id, newPhoto.id)).catch(() => {});
-                            try { await s3.file(originalS3Key).delete(); } catch {}
-                        }
-                        reject(new Error("File size exceeds 50MB limit."));
-                    });
-                    const webStream = Readable.toWeb(fileStream);
-                    try {
-                        await withS3Breaker(() => s3.file(originalS3Key).write(webStream as any, { type: mimeType }));
-                        if (fileStream.truncated) { throw new Error("File size exceeds 50MB limit."); }
-                        resolve(newPhoto.id);
-                    } catch (uploadError: unknown) {
-                        await db.delete(photos).where(eq(photos.id, newPhoto.id)).catch(() => {});
-                        try { await s3.file(originalS3Key).delete(); } catch {}
-                        reject(uploadError);
-                    }
-                });
-                busboy.on("error", (err: unknown) => reject(err));
-                busboy.on("finish", () => { if (!fileProcessed) { reject(new Error("No file uploaded")); } });
-                const clonedReq = c.req.raw.clone();
-                const nodeReqStream = Readable.fromWeb(clonedReq.body as any);
-                nodeReqStream.pipe(busboy);
-            });
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : "Failed to upload photo";
-            return c.json(apiResponse.error(message), 400);
-        }
-        await db.update(photos).set({ status: "PROCESSING" }).where(eq(photos.id, newPhotoId));
-        const [newPhoto] = await db.select().from(photos).where(eq(photos.id, newPhotoId));
-        if (newPhoto) {
-            await photoQueue.add("process-photo", {
-                photoId: newPhoto.id,
-                userId: user.id,
+            const [inserted] = await db.insert(photos).values({
                 galleryId,
-                originalS3Key: newPhoto.originalS3Key,
-            });
+                filename: file.name,
+                originalS3Key,
+                status: "PENDING"
+            }).returning();
+            newPhoto = inserted || null;
+        } catch (dbErr: unknown) {
+            return c.json(apiResponse.error("Failed to create photo record"), 500);
         }
-        return c.json(apiResponse.success({ photoId: newPhotoId }), 202);
+
+        if (!newPhoto) {
+            return c.json(apiResponse.error("Failed to create photo record"), 500);
+        }
+
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            await withS3Breaker(() => s3.file(originalS3Key).write(Buffer.from(arrayBuffer), {
+                type: file!.type,
+            }));
+        } catch (uploadError: unknown) {
+            await db.delete(photos).where(eq(photos.id, newPhoto.id)).catch(() => {});
+            return c.json(apiResponse.error("Failed to upload photo to storage"), 500);
+        }
+
+        await db.update(photos).set({ status: "PROCESSING" }).where(eq(photos.id, newPhoto.id));
+
+        await photoQueue.add("process-photo", {
+            photoId: newPhoto.id,
+            userId: user.id,
+            galleryId,
+            originalS3Key: newPhoto.originalS3Key,
+        });
+
+        return c.json(apiResponse.success({ photoId: newPhoto.id }), 202);
     })
     .openapi(listGalleryPhotosRoute, async (c) => {
         const user = c.get("user");
