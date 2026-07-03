@@ -316,8 +316,8 @@ const routes = galleriesRoutes
         
         let file: File | null = null;
         try {
-            const formData = await c.req.formData();
-            file = formData.get("file") as File;
+            const body = await c.req.parseBody();
+            file = body["file"] as File;
         } catch (err: unknown) {
             return c.json(apiResponse.error("Failed to parse form data"), 400);
         }

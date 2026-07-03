@@ -15,6 +15,13 @@ export default defineConfig({
 	],
 	envDir: '../../',
 	server: {
+		fs: {
+			allow: [
+				'.',
+				'../../packages',
+				'../../node_modules'
+			]
+		},
 		proxy: {
 			'/api': {
 				target: 'http://localhost:3000',
