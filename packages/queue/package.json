@@ -6,6 +6,7 @@
     "types": "./src/index.ts",
     "dependencies": {
         "bullmq": "^5.41.0",
-        "@kirimkarya/redis": "workspace:*"
+        "@kirimkarya/redis": "workspace:*",
+        "@kirimkarya/observability": "workspace:*"
     }
 }

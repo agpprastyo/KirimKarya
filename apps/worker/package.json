@@ -18,7 +18,8 @@
         "drizzle-orm": "^0.39.0",
         "jszip": "^3.10.1",
         "sharp": "^0.34.5",
-        "zod": "^4.3.6"
+        "zod": "^4.3.6",
+        "@kirimkarya/observability": "workspace:*"
     },
     "devDependencies": {
         "@types/archiver": "^7.0.0",

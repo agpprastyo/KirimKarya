@@ -1,10 +1,10 @@
-import { Worker } from "bullmq";
 import { redis } from "@kirimkarya/redis";
 import { db, galleries, user, galleryAccess } from "@kirimkarya/db";
 import { eq } from "drizzle-orm";
 import {
     NOTIFICATION_QUEUE,
     type NotificationJobData,
+    Worker,
 } from "@kirimkarya/queue";
 import { sendGalleryPublishedEmail, sendPhotosReadyEmail, sendSelectionSubmittedEmail, sendReminderEmail } from "@kirimkarya/mail";
 import { env } from "@kirimkarya/env";

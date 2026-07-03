@@ -43,6 +43,9 @@
       ],
       "@kirimkarya/storage": [
         "packages/storage/src/index.ts"
+      ],
+      "@kirimkarya/observability": [
+        "packages/observability/src/index.ts"
       ]
     }
   }

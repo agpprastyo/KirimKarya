@@ -1,4 +1,3 @@
-import { Worker } from "bullmq";
 import { redis } from "@kirimkarya/redis";
 import { db, photos, user } from "@kirimkarya/db";
 import { eq, count, inArray } from "drizzle-orm";
@@ -7,6 +6,7 @@ import {
     PHOTO_PROCESSING_QUEUE,
     type PhotoProcessingJobData,
     notificationQueue,
+    Worker,
 } from "@kirimkarya/queue";
 import sharp from "sharp";
 

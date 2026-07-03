@@ -1,4 +1,3 @@
-import { Worker } from "bullmq";
 import { redis } from "@kirimkarya/redis";
 import { db, galleries, photos, feedbacks } from "@kirimkarya/db";
 import { eq, lt, inArray } from "drizzle-orm";
@@ -6,6 +5,7 @@ import { s3, withS3Breaker } from "@kirimkarya/storage";
 import {
     CLEANUP_QUEUE,
     type CleanupJobData,
+    Worker,
 } from "@kirimkarya/queue";
 
 export const cleanupWorker = new Worker<CleanupJobData>(

@@ -8,7 +8,7 @@ import { Readable } from "stream";
 const authRoutes = new OpenAPIHono();
 
 const UploadAvatarResponseSchema = z.object({
-    url: z.string().url().openapi({ example: "https://my-bucket.s3.amazonaws.com/avatar.jpg" }),
+    url: z.url().openapi({ example: "https://my-bucket.s3.amazonaws.com/avatar.jpg" }),
 });
 
 const uploadAvatarRoute = createRoute({
