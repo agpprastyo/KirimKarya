@@ -1,4 +1,4 @@
-import { Queue as BullQueue, Worker as BullWorker, type Job, type JobsOptions, type Processor, type WorkerOptions } from "bullmq";
+import * as bullmq from "bullmq";
 import { redis, env } from "@kirimkarya/redis";
 import { propagation, context, ROOT_CONTEXT } from "@kirimkarya/observability";
 
@@ -6,8 +6,9 @@ const redisUrl = new URL(env.REDIS_URL || "redis://localhost:6379");
 const bullConnectionOptions = {
     host: redisUrl.hostname,
     port: parseInt(redisUrl.port || "6379", 10),
-    username: redisUrl.username || undefined,
-    password: redisUrl.password || undefined,
+    maxRetriesPerRequest: null as null,
+    enableReadyCheck: false,
+    connectTimeout: 5000,
 };
 
 export const PHOTO_PROCESSING_QUEUE = "photo-processing";
@@ -15,7 +16,6 @@ export const NOTIFICATION_QUEUE = "notifications";
 export const DELIVERY_QUEUE = "delivery";
 export const CLEANUP_QUEUE = "cleanup";
 
-// Define trace context payload fields
 export interface TracedJobData {
     _otel_carrier?: Record<string, string>;
 }
@@ -79,13 +79,9 @@ export type NotificationJobData =
 
 export interface CleanupJobData extends TracedJobData {}
 
-class Queue<DataType = any, ResultType = any, NameType extends string = string> extends BullQueue<DataType, ResultType, NameType> {
-    // Pure BullQueue wrapper
-}
+class Queue<DataType = any, ResultType = any, NameType extends string = string> extends bullmq.Queue<DataType, ResultType, NameType> {}
 
-class Worker<DataType = any, ResultType = any, NameType extends string = string> extends BullWorker<DataType, ResultType, NameType> {
-    // Pure BullWorker wrapper
-}
+class Worker<DataType = any, ResultType = any, NameType extends string = string> extends bullmq.Worker<DataType, ResultType, NameType> {}
 
 export const photoQueue = new Queue<PhotoProcessingJobData>(PHOTO_PROCESSING_QUEUE, {
     connection: bullConnectionOptions,
@@ -139,8 +135,25 @@ export const deliveryQueue = new Queue<NotificationJobData>(DELIVERY_QUEUE, {
     } as any,
 });
 
-export type PhotoJob = Job<PhotoProcessingJobData>;
-export type NotificationJob = Job<NotificationJobData>;
+// Eager connection test — verify BullMQ can connect at startup
+photoQueue.waitUntilReady()
+    .then(() => console.log("[Queue] ✅ photoQueue connected to Redis"))
+    .catch((err) => console.error("[Queue] ❌ photoQueue connection failed:", err.message));
+
+// Redis pub/sub channel for dispatching photo jobs from API → Worker.
+// BullMQ's ioredis hangs in Bun's Bun.serve() context, so the API publishes
+// job data via Bun's native RedisClient, and the Worker subscribes and calls
+// photoQueue.add() (which works in the Worker process).
+export const PHOTO_JOB_CHANNEL = "kirimkarya:photo-job";
+
+/**
+ * Publish a photo processing job via Bun's native Redis PUBLISH.
+ * Call this from the API instead of photoQueue.add().
+ */
+export async function publishPhotoJob(data: PhotoProcessingJobData): Promise<void> {
+    await redis.publish(PHOTO_JOB_CHANNEL, JSON.stringify(data));
+}
+
+export type PhotoJob = bullmq.Job<PhotoProcessingJobData>;
+export type NotificationJob = bullmq.Job<NotificationJobData>;
 export { Queue, Worker };
-
-

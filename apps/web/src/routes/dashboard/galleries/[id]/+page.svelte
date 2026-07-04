@@ -64,7 +64,7 @@
     }));
 
     const deletePhotosMutation = createMutation(() => ({
-        mutationFn: (ids: string[]) => handleResponse(apiClient.api.photos.photos.$delete({
+        mutationFn: (ids: string[]) => handleResponse(apiClient.api.photos["bulk-delete"].$post({
             json: { ids },
         })),
         onSuccess: () => {
@@ -277,8 +277,10 @@
         const queue = [...selectedFiles];
         isUploading = true;
         uploadStats = { total: queue.length, completed: 0, failed: 0 };
+        let completedCount = 0;
+        let failedCount = 0;
 
-        const CONCURRENCY = 4;
+        const CONCURRENCY = 2;
         const activeUploads: Promise<void>[] = [];
 
         const uploadFile = async (item: SelectedFile) => {
@@ -297,16 +299,18 @@
                 });
 
                 if (res.ok) {
-                    uploadStats.completed++;
+                    completedCount++;
+                    uploadStats = { ...uploadStats, completed: completedCount, failed: failedCount };
                     URL.revokeObjectURL(item.previewUrl);
                     selectedFiles = selectedFiles.filter((f) => f.id !== item.id);
-                    queryClient.invalidateQueries({ queryKey: ["galleries", galleryId, "photos"] });
                 } else {
-                    uploadStats.failed++;
+                    failedCount++;
+                    uploadStats = { ...uploadStats, completed: completedCount, failed: failedCount };
                 }
             } catch (e) {
                 console.error("Upload failed for file:", item.name, e);
-                uploadStats.failed++;
+                failedCount++;
+                uploadStats = { ...uploadStats, completed: completedCount, failed: failedCount };
             }
         };
 

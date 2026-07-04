@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # Node exporter untuk sistem metrics
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: kirimkarya-node-exporter
+    restart: always
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # Redis exporter untuk monitoring Redis
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.56.0
+    container_name: kirimkarya-redis-exporter
+    restart: always
+    ports:
+      - "9121:9121"
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # PostgreSQL exporter untuk monitoring database
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.14.0
+    container_name: kirimkarya-postgres-exporter
+    restart: always
+    ports:
+      - "9187:9187"
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${DB_USER:-admin}:${DB_PASSWORD:-admin123}@postgres:5432/${DB_NAME:-kirimkarya}?sslmode=disable"
+    depends_on:
+      - postgres
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+

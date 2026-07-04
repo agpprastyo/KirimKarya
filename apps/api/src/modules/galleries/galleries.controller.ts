@@ -2,12 +2,11 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { apiResponse, createApiResponseSchema, ApiErrorSchema, zUuId } from "../../lib/response";
 import { CreateGallerySchema, UpdateGallerySchema, GalleryResponseSchema } from "./galleries.schema";
 import { galleryService } from "./galleries.service";
-import { notificationQueue, deliveryQueue } from "@kirimkarya/queue";
+import { notificationQueue, deliveryQueue, publishPhotoJob } from "@kirimkarya/queue";
 import type { HonoEnv } from "../../core/types/hono";
 import { db, photos, feedbacks, galleries } from "@kirimkarya/db";
 import { eq, inArray } from "drizzle-orm";
 import { s3, withS3Breaker } from "@kirimkarya/storage";
-import { photoQueue } from "@kirimkarya/queue";
 import sharp from "sharp";
 import { env } from "@kirimkarya/env";
 
@@ -309,20 +308,26 @@ const routes = galleriesRoutes
     .openapi(uploadPhotoRoute, async (c) => {
         const user = c.get("user");
         const { id: galleryId } = c.req.valid("param");
+        console.log(`[Upload Debug] Step 1: Handler entered for gallery ${galleryId}`);
         const gallery = await galleryService.getById(galleryId, user.id);
         if (!gallery) return c.json(apiResponse.error("Gallery not found"), 404);
+        console.log(`[Upload Debug] Step 2: Gallery found`);
 
         const MAX_SIZE = 50 * 1024 * 1024;
         
         let file: File | null = null;
         try {
+            console.log(`[Upload Debug] Step 3: Parsing body...`);
             const body = await c.req.parseBody();
             file = body["file"] as File;
+            console.log(`[Upload Debug] Step 3: Body parsed, file: ${file?.name}, size: ${file?.size}`);
         } catch (err: unknown) {
+            console.error(`[Upload Debug] Step 3 FAILED: parseBody error`, err);
             return c.json(apiResponse.error("Failed to parse form data"), 400);
         }
 
         if (!file || !(file instanceof File)) {
+            console.warn(`[Upload Debug] No file in body`);
             return c.json(apiResponse.error("No file uploaded"), 400);
         }
 
@@ -338,6 +343,7 @@ const routes = galleriesRoutes
         
         let newPhoto: typeof photos.$inferSelect | null = null;
         try {
+            console.log(`[Upload Debug] Step 4: Inserting DB record...`);
             const [inserted] = await db.insert(photos).values({
                 galleryId,
                 filename: file.name,
@@ -345,7 +351,9 @@ const routes = galleriesRoutes
                 status: "PENDING"
             }).returning();
             newPhoto = inserted || null;
+            console.log(`[Upload Debug] Step 4: DB record created, id: ${newPhoto?.id}`);
         } catch (dbErr: unknown) {
+            console.error(`[Upload Debug] Step 4 FAILED: DB insert error`, dbErr);
             return c.json(apiResponse.error("Failed to create photo record"), 500);
         }
 
@@ -354,24 +362,34 @@ const routes = galleriesRoutes
         }
 
         try {
+            console.log(`[Upload Debug] Step 5: Uploading to S3... key: ${originalS3Key}`);
             const arrayBuffer = await file.arrayBuffer();
-            await withS3Breaker(() => s3.file(originalS3Key).write(Buffer.from(arrayBuffer), {
+            console.log(`[Upload Debug] Step 5a: arrayBuffer ready, size: ${arrayBuffer.byteLength}`);
+            await s3.file(originalS3Key).write(Buffer.from(arrayBuffer), {
                 type: file!.type,
-            }));
+            });
+            console.log(`[Upload Debug] Step 5: S3 upload complete`);
         } catch (uploadError: unknown) {
+            console.error(`[Upload Debug] Step 5 FAILED: S3 upload error`, uploadError);
             await db.delete(photos).where(eq(photos.id, newPhoto.id)).catch(() => {});
             return c.json(apiResponse.error("Failed to upload photo to storage"), 500);
         }
 
+        console.log(`[Upload Debug] Step 6: Updating status to PROCESSING...`);
         await db.update(photos).set({ status: "PROCESSING" }).where(eq(photos.id, newPhoto.id));
 
-        await photoQueue.add("process-photo", {
+        console.log(`[Upload Debug] Step 7: Publishing photo job via Redis...`);
+        // Use Bun's native Redis PUBLISH instead of BullMQ's ioredis (which hangs
+        // in Bun.serve context). Worker subscribes and forwards to BullMQ.
+        await publishPhotoJob({
             photoId: newPhoto.id,
             userId: user.id,
             galleryId,
             originalS3Key: newPhoto.originalS3Key,
         });
+        console.log(`[Upload Debug] Step 7a: ✅ Photo job published for ${newPhoto.id}`);
 
+        console.log(`[Upload Debug] Step 8: DONE! Returning 202`);
         return c.json(apiResponse.success({ photoId: newPhoto.id }), 202);
     })
     .openapi(listGalleryPhotosRoute, async (c) => {

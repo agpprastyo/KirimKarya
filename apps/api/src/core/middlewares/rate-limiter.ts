@@ -11,8 +11,8 @@ import { apiResponse } from "../../lib/response";
  */
 export const rateLimiterMiddleware = () => {
     return createMiddleware(async (c, next) => {
-        // Skip rate-limiting for documentation pages
-        if (c.req.path.startsWith("/api/docs")) {
+        // Skip rate-limiting for documentation pages and in development mode
+        if (c.req.path.startsWith("/api/docs") || process.env.NODE_ENV === "development" || env.NODE_ENV === "development") {
             return await next();
         }
 

@@ -1,14 +1,57 @@
-import { cleanupQueue } from "@kirimkarya/queue";
+import { PHOTO_JOB_CHANNEL, cleanupQueue, photoQueue, type PhotoProcessingJobData } from "@kirimkarya/queue";
 import { photoProcessingWorker } from "./workers/photo-processing";
 import { notificationWorker } from "./workers/notification";
 import { cleanupWorker } from "./workers/cleanup";
 import { deliveryWorker } from "./workers/delivery";
 import { env } from "@kirimkarya/env";
+import { RedisClient } from "bun";
 
 console.log("🚀 Kirim Karya Worker is starting...");
 
 const workers = [photoProcessingWorker, notificationWorker, cleanupWorker, deliveryWorker];
 console.log(`✅ Started ${workers.length} worker queues.`);
+
+const photoJobSubscriber = new RedisClient(env.REDIS_URL);
+
+const enqueuePhotoJobFromMessage = async (message: string) => {
+    let payload: Partial<PhotoProcessingJobData>;
+
+    try {
+        payload = JSON.parse(message) as Partial<PhotoProcessingJobData>;
+    } catch (err: any) {
+        console.error(`[Queue Bridge] Invalid photo job payload (not JSON): ${err?.message || err}`);
+        return;
+    }
+
+    const { photoId, userId, galleryId, originalS3Key } = payload;
+    if (!photoId || !userId || !galleryId || !originalS3Key) {
+        console.error("[Queue Bridge] Incomplete photo job payload received:", payload);
+        return;
+    }
+
+    await photoQueue.add(
+        "process-photo",
+        {
+            photoId,
+            userId,
+            galleryId,
+            originalS3Key,
+        },
+        {
+            jobId: photoId,
+        }
+    );
+
+    console.log(`[Queue Bridge] Enqueued photo job ${photoId} from ${PHOTO_JOB_CHANNEL}`);
+};
+
+await photoJobSubscriber.connect();
+await photoJobSubscriber.subscribe(PHOTO_JOB_CHANNEL, (message) => {
+    void enqueuePhotoJobFromMessage(message).catch((err: any) => {
+        console.error(`[Queue Bridge] Failed to enqueue photo job from ${PHOTO_JOB_CHANNEL}:`, err?.message || err);
+    });
+});
+console.log(`✅ Subscribed to ${PHOTO_JOB_CHANNEL}`);
 
 (async () => {
     await cleanupQueue.add("gallery_expiration_job", {}, {
@@ -29,7 +72,7 @@ const server = Bun.serve({
 
 const shutdown = async (signal: string) => {
     console.log(`\n[Worker] Received ${signal}. Starting graceful shutdown...`);
-    
+
     // Set a safety fallback exit timeout of 10 seconds
     const timeout = setTimeout(() => {
         console.error("[Worker] Graceful shutdown timed out. Forcing exit.");
@@ -43,7 +86,15 @@ const shutdown = async (signal: string) => {
     } catch (err: any) {
         console.error("[Worker] Failed to stop HTTP health listener:", err.message);
     }
-    
+
+    try {
+        console.log("[Worker] Closing photo job subscriber...");
+        photoJobSubscriber.close();
+        console.log("[Worker] Photo job subscriber closed.");
+    } catch (err: any) {
+        console.error("[Worker] Failed to close photo job subscriber:", err.message);
+    }
+
     await Promise.all(
         workers.map(async (worker) => {
             console.log(`[Worker] Closing worker: ${worker.name}...`);
@@ -64,7 +115,7 @@ const shutdown = async (signal: string) => {
     } catch (err: any) {
         console.error("[Worker] Failed to close database connection pool:", err.message);
     }
-    
+
     clearTimeout(timeout);
     console.log("[Worker] All workers and pools closed gracefully. Exiting process.");
     process.exit(0);

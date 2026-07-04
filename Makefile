@@ -1,4 +1,4 @@
-.PHONY: install dev dev-stop api web worker db-generate db-migrate db-studio infra-up infra-down infra-reset auth-generate prod-build prod-up prod-down prod-migrate prod-logs
+.PHONY: install dev dev-stop api web worker db-generate db-migrate db-studio infra-up infra-down infra-reset auth-generate prod-build prod-up prod-down prod-migrate prod-logs monitoring-start monitoring-stop monitoring-restart monitoring-status
 
 # Infrastructure management
 infra-up:
@@ -11,6 +11,11 @@ infra-reset:
 	docker compose down -v
 	@echo "Infrastructure reset. All data has been removed."
 
+kill:
+	@echo "Killing all Bun and Vite processes..."
+	@pkill -9 -f "bun run" 2>/dev/null || true
+	@pkill -9 -f "vite" 2>/dev/null || true
+	@echo "Done."
 
 seed:
 	cd packages/db && bun run db:migrate
@@ -25,6 +30,7 @@ install:
 
 # Start all applications in development mode (parallel execution)
 dev:
+	@echo "Starting development environment..."
 	@make infra-up
 	@echo "Starting API Server and Web Client (and Worker)..."
 	make -j4 api web worker db-studio
@@ -97,4 +103,27 @@ prod-down:
 # Tail logs for all production services
 prod-logs:
 	docker compose -f docker-compose.prod.yml logs -f --tail=100
+
+# ── Monitoring targets ────────────────────────────────────────────────────────
+
+# Start monitoring infrastructure (Prometheus, Grafana, Exporters)
+monitoring-start:
+	@chmod +x scripts/setup-monitoring.sh
+	@scripts/setup-monitoring.sh start
+
+# Stop monitoring infrastructure
+monitoring-stop:
+	@scripts/setup-monitoring.sh stop
+
+# Restart monitoring infrastructure
+monitoring-restart:
+	@scripts/setup-monitoring.sh restart
+
+# Check monitoring infrastructure status
+monitoring-status:
+	@scripts/setup-monitoring.sh status
+
+# View monitoring dashboard docs
+monitoring-docs:
+	@cat docs/monitoring-dashboard.md | less
 

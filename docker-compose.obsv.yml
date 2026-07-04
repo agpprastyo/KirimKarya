@@ -41,8 +41,13 @@ services:
     image: prom/prometheus:v2.49.1
     volumes:
       - ./config/prometheus-config.yaml:/etc/prometheus/prometheus.yml
+      - ./config/alert-rules.yaml:/etc/prometheus/alert-rules.yaml
     ports:
       - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
     deploy:
       resources:
         limits:

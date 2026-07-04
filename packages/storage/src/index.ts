@@ -20,6 +20,9 @@ export const s3Breaker = new CircuitBreaker(async <T>(action: () => Promise<T>):
 });
 
 export const withS3Breaker = <T>(action: () => Promise<T>): Promise<T> => {
+    if (process.env.NODE_ENV === "development" || env.NODE_ENV === "development") {
+        return action();
+    }
     return s3Breaker.fire(action) as Promise<T>;
 };
 

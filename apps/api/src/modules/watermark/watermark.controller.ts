@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { apiResponse, createApiResponseSchema, ApiErrorSchema } from "../../lib/response";
 import { db, user, photos, galleries } from "@kirimkarya/db";
-import { photoQueue } from "@kirimkarya/queue";
+import { publishPhotoJob } from "@kirimkarya/queue";
 import { redis } from "@kirimkarya/redis";
 import { eq } from "drizzle-orm";
 import { s3, withS3Breaker } from "@kirimkarya/storage";
@@ -338,7 +338,7 @@ const routes = watermarkRoutes
                 .set({ status: "PROCESSING" })
                 .where(eq(photos.id, photo.id));
 
-            await photoQueue.add("process-photo", {
+            await publishPhotoJob({
                 photoId: photo.id,
                 userId: authUser.id,
                 galleryId: photo.galleryId,

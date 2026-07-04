@@ -20,6 +20,6 @@ export function initNodeTracing(serviceName: string, collectorEndpoint: string) 
     process.on('SIGTERM', () => {
         sdk.shutdown()
             .then(() => console.log('OTel SDK shut down successfully'))
-            .catch((err) => console.error('Error shutting down OTel SDK', err));
+            .catch((err: unknown) => console.error('Error shutting down OTel SDK', err));
     });
 }
