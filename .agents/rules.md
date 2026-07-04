@@ -426,10 +426,11 @@ Jika logika dipakai oleh >1 app, pindahkan ke package yang sesuai:
 
 > Full design spec: `docs/superpowers/specs/2026-07-01-branching-strategy-design.md` (private repo only)
 
-### Branch Structure
+### Branch Protection & PR Requirement
 
 - **`master`** = satu-satunya branch permanen di public repo. Selalu bersih, tested, dan bisa di-deploy.
-- **Branch sementara** dibuat dari `master`, dihapus setelah merge.
+- **DILARANG MERGE/PUSH LANGSUNG**: Proteksi branch `master` diaktifkan di GitHub. Seluruh perubahan ke `master` WAJIB melalui Pull Request (PR) dan mendapatkan review/approval.
+- **Branch sementara** dibuat dari `master`, dihapus setelah PR di-merge.
 
 ### Naming Convention
 
@@ -437,7 +438,7 @@ Jika logika dipakai oleh >1 app, pindahkan ke package yang sesuai:
 |--------|--------|--------------|
 | `feat/` | `feat/gallery-sharing` | Fitur baru |
 | `fix/` | `fix/otp-rate-limit` | Bug fix |
-| `hotfix/` | `hotfix/auth-crash` | Fix kritis langsung ke master |
+| `hotfix/` | `hotfix/auth-crash` | Fix kritis langsung ke master (hanya jika disetujui/darurat) |
 | `refactor/` | `refactor/query-perf` | Peningkatan kode tanpa fitur baru |
 | `chore/` | `chore/update-deps` | Maintenance, deps update |
 | `wip/` | `wip/redis-experiment` | **Tidak pernah di-push ke `origin` (public)** |
@@ -450,14 +451,15 @@ private → github.com/agpprastyo/KirimKarya-internal (PRIVATE)
 ```
 
 - `wip/*` branch → **hanya ke `private`**, tidak pernah ke `origin`
-- `feat/`, `fix/`, `refactor/` → ke `private` kapan saja, ke `origin` **hanya setelah merge ke `master`**
+- `feat/`, `fix/`, `refactor/` → di-push ke `private` untuk development, dan dibuatkan Pull Request (PR) untuk merge ke `master`.
+- Pushing/merging ke `origin/master` **hanya diperbolehkan melalui Pull Request** setelah workflow CI sukses.
 - `docs/superpowers/` dan `.superpowers/` → **hanya ke `private`** (ada di `.gitignore` untuk `origin`)
 
-### Pre-Merge Checklist (sebelum push ke `origin master`)
+### Pre-PR Checklist (sebelum membuat Pull Request ke `master`)
 
 - [ ] `bun test` → 0 failures
 - [ ] `bun x tsc --noEmit` → 0 errors  
-- [ ] Tidak ada file `docs/superpowers/`, `.superpowers/`, atau `.env*` yang staged
+- [ ] Tidak ada file `docs/superpowers/`, `.superpowers/`, atau `.env*` yang masuk ke commits target `origin`
 
 ### Commit Message Convention
 
