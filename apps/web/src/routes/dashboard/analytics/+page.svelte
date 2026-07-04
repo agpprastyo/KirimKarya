@@ -19,8 +19,8 @@
     // Last refreshed timestamp
     let lastRefreshed = $state(new Date());
     $effect(() => {
-        if ($insightsQuery.dataUpdatedAt) {
-            lastRefreshed = new Date($insightsQuery.dataUpdatedAt);
+        if (insightsQuery.dataUpdatedAt) {
+            lastRefreshed = new Date(insightsQuery.dataUpdatedAt);
         }
     });
 
@@ -55,7 +55,7 @@
     </div>
 
     <!-- ── Loading skeleton ──────────────────────────────────────────────── -->
-    {#if $insightsQuery.isLoading}
+    {#if insightsQuery.isLoading}
         <div class="space-y-5">
             <!-- KPI skeleton -->
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -73,17 +73,17 @@
         </div>
 
     <!-- ── Error state ───────────────────────────────────────────────────── -->
-    {:else if $insightsQuery.error}
+    {:else if insightsQuery.error}
         <div role="alert" class="alert alert-error alert-soft rounded-2xl font-semibold">
             <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Failed to load analytics: {$insightsQuery.error.message}
+            Failed to load analytics: {insightsQuery.error.message}
         </div>
 
     <!-- ── Data ─────────────────────────────────────────────────────────── -->
-    {:else if $insightsQuery.data}
-        {@const data = $insightsQuery.data}
+    {:else if insightsQuery.data}
+        {@const data = insightsQuery.data}
 
         <!-- KPI Row -->
         <AnalyticsKpiRow funnel={data.funnel} />
