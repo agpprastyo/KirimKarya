@@ -5,8 +5,21 @@ WORKDIR /app
 # ── deps stage ────────────────────────────────────────────────────────────────
 FROM base AS deps
 COPY package.json bun.lock ./
+# Copy all workspace app package.json files (all required by bun for lockfile resolution)
 COPY apps/web/package.json apps/web/
+COPY apps/api/package.json apps/api/
+COPY apps/worker/package.json apps/worker/
+COPY apps/e2e/package.json apps/e2e/
+
+# Copy all required packages
 COPY packages/env/package.json packages/env/
+COPY packages/observability/package.json packages/observability/
+COPY packages/db/package.json packages/db/
+COPY packages/mail/package.json packages/mail/
+COPY packages/queue/package.json packages/queue/
+COPY packages/redis/package.json packages/redis/
+COPY packages/storage/package.json packages/storage/
+
 RUN bun install --frozen-lockfile
 
 # ── build stage ───────────────────────────────────────────────────────────────
@@ -30,16 +43,20 @@ ENV PUBLIC_WEB_URL=$PUBLIC_WEB_URL
 
 RUN bun run build
 
-# ── runner stage: serve built static files with a minimal server ──────────────
+# ── runner stage: serve with adapter-node generated server ───────────────────
 FROM oven/bun:1.3-alpine AS runner
 WORKDIR /app
 
 COPY --from=builder /app/apps/web/build ./build
 COPY --from=builder /app/apps/web/package.json ./
+COPY --from=deps /app/node_modules ./node_modules
 
 EXPOSE 3002
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://localhost:3002/ || exit 1
 
-CMD ["bun", "--env-file=/run/secrets/env", "x", "vite", "preview", "--host", "0.0.0.0", "--port", "3002"]
+# adapter-node outputs a standalone server at build/index.js
+# PORT env var controls the listening port
+ENV PORT=3002
+CMD ["bun", "--env-file=/run/secrets/env", "run", "build/index.js"]

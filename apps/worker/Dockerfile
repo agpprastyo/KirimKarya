@@ -8,10 +8,15 @@ RUN apk add --no-cache python3 make g++ vips-dev
 # ── deps stage ────────────────────────────────────────────────────────────────
 FROM base AS deps
 COPY package.json bun.lock ./
+# Copy all workspace app package.json files (all required by bun for lockfile resolution)
 COPY apps/worker/package.json apps/worker/
+COPY apps/web/package.json apps/web/
+COPY apps/api/package.json apps/api/
+COPY apps/e2e/package.json apps/e2e/
 COPY packages/db/package.json packages/db/
 COPY packages/env/package.json packages/env/
 COPY packages/mail/package.json packages/mail/
+COPY packages/observability/package.json packages/observability/
 COPY packages/queue/package.json packages/queue/
 COPY packages/redis/package.json packages/redis/
 COPY packages/storage/package.json packages/storage/
