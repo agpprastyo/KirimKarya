@@ -66,6 +66,7 @@
         "@inlang/paraglide-sveltekit": "1.0.0-beta.7",
         "@kirimkarya/observability": "workspace:*",
         "@tanstack/svelte-query": "^6.1.10",
+        "apexcharts": "^5.16.0",
         "api": "workspace:*",
         "better-auth": "^1.5.3",
         "hono": "^4.12.5",
@@ -822,6 +823,8 @@
     "ansi-regex": ["ansi-regex@5.0.1", "", {}, "sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ=="],
 
     "ansi-styles": ["ansi-styles@4.3.0", "", { "dependencies": { "color-convert": "^2.0.1" } }, "sha512-zbB9rCJAT1rbjiVDb2hqKFHNYLxgtk8NURxZ3IZwD3F6NtxbXZQCnnSi1Lkx+IDohdPlFp222wVALIheZJQSEg=="],
+
+    "apexcharts": ["apexcharts@5.16.0", "", {}, "sha512-ULO3Gqrm0/26uwBcYz49u181uIp8Fy6BQQgg9QUDajs+JAs/EbXxiAmdc6BLy1JY29/JXroM7P0j0t2JPDApdg=="],
 
     "api": ["api@workspace:apps/api"],
 
