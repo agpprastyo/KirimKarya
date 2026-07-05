@@ -30,7 +30,7 @@ export interface PublicPhoto {
  * SSR load: fetch gallery metadata and photos server-side so public galleries get
  * proper <title>, meta description, and first paint without client-side waterfall.
  */
-export const load: PageServerLoad = async ({ params, request, cookies }) => {
+export const load: PageServerLoad = async ({ params, request, cookies }: Parameters<PageServerLoad>[0]) => {
     const { id } = params;
 
     // Retrieve or generate a server-persistent client identifier cookie
@@ -42,7 +42,7 @@ export const load: PageServerLoad = async ({ params, request, cookies }) => {
             maxAge: 60 * 60 * 24 * 365, // 1 year
             httpOnly: false, // readable by client JS if needed
             sameSite: "lax",
-            secure: env.NODE_ENV === "production",
+            secure: import.meta.env.PROD,
         });
     }
 
@@ -55,7 +55,7 @@ export const load: PageServerLoad = async ({ params, request, cookies }) => {
         });
 
         if (res.status === 403) {
-            const data = await res.json().catch(() => ({}));
+            const data = (await res.json().catch(() => ({}))) as { error?: string };
             return {
                 gallery: null,
                 isDraft: data.error === "Gallery not published yet",
@@ -70,9 +70,10 @@ export const load: PageServerLoad = async ({ params, request, cookies }) => {
             return { gallery: null, isDraft: false, accessRequired: false, isExpired: false, photos: [], clientId };
         }
 
-        const data = await res.json();
+        const data = (await res.json()) as { data: PublicGallery };
         const gallery = data.data;
 
+        // @ts-expect-error: expiresAt is not defined on PublicGallery type but is present at runtime
         const isExpired = gallery.expiresAt && new Date(gallery.expiresAt) < new Date();
 
         let photos: PublicPhoto[] = [];
@@ -87,7 +88,7 @@ export const load: PageServerLoad = async ({ params, request, cookies }) => {
             });
 
             if (photosRes.ok) {
-                const photosData = await photosRes.json();
+                const photosData = (await photosRes.json()) as { data?: PublicPhoto[] };
                 photos = photosData.data || [];
             } else if (photosRes.status === 403) {
                 accessRequired = true;

@@ -1,4 +1,5 @@
 import { z } from "zod";
+// @ts-expect-error SvelteKit public env is generated at build time
 import * as publicEnv from "$env/static/public";
 
 const envSchema = z.object({
