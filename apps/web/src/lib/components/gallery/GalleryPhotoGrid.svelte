@@ -3,9 +3,9 @@
 
     interface Photo {
         id: string;
-        watermarkUrl?: string;
-        thumbnailUrl?: string;
-        comment?: string;
+        watermarkUrl?: string | null;
+        thumbnailUrl?: string | null;
+        comment?: string | null;
         isSelected: boolean;
     }
 

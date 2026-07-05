@@ -18,9 +18,11 @@ async function check() {
     if (failed.length > 0) {
         console.log("\n--- Sample Failed Job ---");
         const sample = failed[0];
-        console.log(`Job ID: ${sample.id}`);
-        console.log(`Failed Reason: ${sample.failedReason}`);
-        console.log(`Stacktrace:`, sample.stacktrace);
+        if (sample) {
+            console.log(`Job ID: ${sample.id}`);
+            console.log(`Failed Reason: ${sample.failedReason}`);
+            console.log(`Stacktrace:`, sample.stacktrace);
+        }
     }
 }
 

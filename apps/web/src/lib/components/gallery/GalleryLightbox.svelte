@@ -2,9 +2,9 @@
     interface Photo {
         id: string;
         filename?: string;
-        watermarkUrl?: string;
-        thumbnailUrl?: string;
-        comment?: string;
+        watermarkUrl?: string | null;
+        thumbnailUrl?: string | null;
+        comment?: string | null;
         isSelected: boolean;
     }
 

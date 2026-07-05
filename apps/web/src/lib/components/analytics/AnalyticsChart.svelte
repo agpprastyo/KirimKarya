@@ -12,7 +12,7 @@
     let { dailyActivity }: Props = $props();
 
     let chartEl: HTMLDivElement | undefined = $state();
-    let chart: import("apexcharts").default | null = null;
+    let chart: import("apexcharts") | null = null;
 
     const totalActivity = $derived(dailyActivity.reduce((s, d) => s + d.count, 0));
     const totalSelections = $derived(dailyActivity.reduce((s, d) => s + d.selections, 0));
@@ -21,13 +21,13 @@
     onMount(async () => {
         if (!chartEl || dailyActivity.length === 0) return;
 
-        const ApexCharts = (await import("apexcharts")).default;
+        const ApexChartsClass = (await import("apexcharts")).default;
 
         const categories = dailyActivity.map(d =>
             new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
         );
 
-        const options: ApexCharts["opts"] = {
+        const options: import("apexcharts").ApexOptions = {
             chart: {
                 type: "area",
                 height: 220,
@@ -38,7 +38,6 @@
                 sparkline: { enabled: false },
                 animations: {
                     enabled: true,
-                    easing: "easeinout",
                     speed: 600,
                 },
             },
@@ -100,7 +99,7 @@
             markers: { size: 0 },
         };
 
-        chart = new ApexCharts(chartEl, options);
+        chart = new ApexChartsClass(chartEl, options);
         chart.render();
     });
 

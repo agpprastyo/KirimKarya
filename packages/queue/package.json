@@ -5,8 +5,9 @@
     "main": "./src/index.ts",
     "types": "./src/index.ts",
     "dependencies": {
-        "bullmq": "^5.41.0",
+        "@kirimkarya/observability": "workspace:*",
         "@kirimkarya/redis": "workspace:*",
-        "@kirimkarya/observability": "workspace:*"
+        "bullmq": "^5.41.0",
+        "prom-client": "^15.1.3"
     }
 }

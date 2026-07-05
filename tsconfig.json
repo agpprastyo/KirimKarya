@@ -48,5 +48,8 @@
         "packages/observability/src/index.ts"
       ]
     }
-  }
+  },
+  "exclude": [
+    "apps/web"
+  ]
 }

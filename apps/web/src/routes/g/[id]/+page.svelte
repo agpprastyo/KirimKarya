@@ -86,7 +86,7 @@
             json: { email },
         });
         if (res.ok) return { success: true };
-        const err = await res.json().catch(() => ({}));
+        const err = (await res.json().catch(() => ({}))) as { message?: string };
         return { success: false, error: err.message };
     }
 
@@ -96,7 +96,7 @@
             json: { email, code },
         });
         if (res.ok) return { success: true };
-        const err = await res.json().catch(() => ({}));
+        const err = (await res.json().catch(() => ({}))) as { message?: string };
         return { success: false, error: err.message };
     }
 
@@ -106,7 +106,7 @@
             json: { email, password },
         });
         if (res.ok) return { success: true };
-        const err = await res.json().catch(() => ({}));
+        const err = (await res.json().catch(() => ({}))) as { message?: string };
         return { success: false, error: err.message };
     }
 
@@ -121,7 +121,7 @@
 
         const newStatus = !photo.isSelected;
 
-        if (newStatus && gallery?.selectionLimit > 0 && shortlistedCount >= gallery.selectionLimit && !extraQuotaUnlocked) {
+        if (newStatus && gallery && gallery.selectionLimit > 0 && shortlistedCount >= gallery.selectionLimit && !extraQuotaUnlocked) {
             isPaywallModalOpen = true;
             return;
         }
@@ -137,9 +137,9 @@
 
             if (!res.ok) {
                 photo.isSelected = !newStatus;
-                const errData = await res.json().catch(() => ({}));
+                const errData = (await res.json().catch(() => ({}))) as { message?: string };
                 if (errData && errData.message === "Selection quota exceeded") {
-                    if (gallery?.selectionLimit > 0 && !extraQuotaUnlocked) {
+                    if (gallery && gallery.selectionLimit > 0 && !extraQuotaUnlocked) {
                         isPaywallModalOpen = true;
                     } else {
                         showToast(`Selection quota exceeded! You are allowed up to ${gallery?.selectionLimit || 0} selections.`, "error");
@@ -188,7 +188,7 @@
                 isFinalizeModalOpen = false;
                 showToast("Selection finalized! Your photographer has been notified.", "success");
             } else {
-                const errData = await res.json().catch(() => ({}));
+                const errData = (await res.json().catch(() => ({}))) as { message?: string };
                 showToast(errData.message || "Failed to finalize selection", "error");
             }
         } catch {
@@ -255,7 +255,7 @@
         <!-- Navigation -->
         <nav class="sticky top-0 z-40 bg-base-100/80 backdrop-blur-xl border-b border-base-content/5 px-8 h-20 flex items-center justify-between">
             <div>
-                <h1 class="text-2xl font-black tracking-tight">{gallery.title}</h1>
+                <h1 class="text-2xl font-black tracking-tight">{gallery?.title}</h1>
                 <p class="text-[10px] uppercase font-black tracking-widest opacity-40 italic">By Kirim Karya Photographers</p>
             </div>
             <div class="flex items-center gap-6">
@@ -283,7 +283,7 @@
 
         <div class="p-8 md:p-20 text-center space-y-4">
             <div class="badge badge-primary font-black text-[10px] tracking-widest uppercase px-3 py-1 mb-4">Official Gallery</div>
-            <h2 class="text-6xl md:text-8xl font-black tracking-tighter leading-none mx-auto max-w-4xl">{gallery.title}</h2>
+            <h2 class="text-6xl md:text-8xl font-black tracking-tighter leading-none mx-auto max-w-4xl">{gallery?.title}</h2>
             <p class="text-xl md:text-2xl text-base-content/40 font-medium italic">A curated selection of your special moments.</p>
         </div>
 

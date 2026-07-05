@@ -14,7 +14,7 @@
  * initBullMQMetrics(photoQueue, notificationQueue, cleanupQueue)
  */
 
-import { Queue, QueueListener } from 'bullmq';
+import { Queue } from 'bullmq';
 import { Counter, Gauge, Histogram, register } from 'prom-client';
 
 // Metrics definition
@@ -75,11 +75,13 @@ export function initBullMQMetrics(...queues: Queue[]) {
     }, 15000);
 
     // Listen for job completion
-    queue.on('completed', (job) => {
+    // @ts-expect-error Queue does not declare completed event in types
+    queue.on('completed', (job: import('bullmq').Job) => {
       completedJobsCounter.inc({ queue: queueName });
 
-      if (job.progress() >= 0) {
-        const duration = Date.now() - job.attemptStarted;
+      const progress = job.progress;
+      if (typeof progress === 'number' && progress >= 0) {
+        const duration = Date.now() - job.attemptsStarted;
         jobDurationHistogram.observe(
           { queue: queueName, status: 'success' },
           duration
@@ -88,11 +90,12 @@ export function initBullMQMetrics(...queues: Queue[]) {
     });
 
     // Listen for job failures
-    queue.on('failed', (job, err) => {
+    // @ts-expect-error Queue does not declare failed event in types
+    queue.on('failed', (job: import('bullmq').Job | undefined, err: Error) => {
       failedJobsCounter.inc({ queue: queueName });
 
-      if (job && job.attemptStarted) {
-        const duration = Date.now() - job.attemptStarted;
+      if (job && job.attemptsStarted) {
+        const duration = Date.now() - job.attemptsStarted;
         jobDurationHistogram.observe(
           { queue: queueName, status: 'failed' },
           duration
