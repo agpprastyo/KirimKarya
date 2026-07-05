@@ -25,10 +25,12 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Compile Paraglide translations
-        run: bun run --cwd apps/web paraglide-js compile --project ./project.inlang
+        working-directory: apps/web
+        run: bun run paraglide-js compile --project ./project.inlang
 
       - name: Run Svelte diagnostics & check
-        run: bun run --cwd apps/web check
+        working-directory: apps/web
+        run: bun run check
 
       - name: Run TypeScript typecheck
         run: bun x tsc --noEmit
