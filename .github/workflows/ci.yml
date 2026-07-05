@@ -24,6 +24,9 @@ jobs:
       - name: Install Dependencies
         run: bun install --frozen-lockfile
 
+      - name: Compile Paraglide translations
+        run: bun x paraglide-js compile --project ./apps/web/project.inlang
+
       - name: Run Svelte diagnostics & check
         run: bun run --cwd apps/web check
 
